@@ -90,11 +90,80 @@ class PowerBiApiClient:
             print(response.status_code)
             print(response.text)
             return False
-
-
-
-
-
     
+    def createDataset(self,workspace_id,schema):
+        pushTable = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/datasets?defaultRetentionPolicy=basicFIFO".format(
+            groupId = workspace_id            
+        )
+
+        headers = {
+           
+            'Authorization': "Bearer " + self.token
+        } 
+        response = requests.request("POST", pushTable, data=schema, headers=headers)
+
+        if response.status_code == 201 or response.status_code == 202:
+            return True
+        else:
+            return False
+        
+
+    def deleteDataset(self,workspace_id,dataset_id):
+        deleteUrl = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/datasets/{datasetId}".format(
+            groupId = workspace_id,
+            datasetId = dataset_id
+        )
+        headers = {           
+            'Authorization': "Bearer " + self.token
+        }
+        response = requests.request("DELETE",deleteUrl,headers=headers)
+        if response.status_code == 200:
+            return True
+        else:
+            return False
+
+    def postRows(self,workspace_id,dataset_id,table_name,rows):
+        postRowsUrl = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/datasets/{datasetId}/tables/{tableName}/rows".format(
+            groupId = workspace_id,
+            datasetId = dataset_id,
+            tableName = table_name
+        )
+        headers = {           
+            'Authorization': "Bearer " + self.token
+        }
+        response = requests.request("POST", postRowsUrl, data=rows, headers=headers)
+        if response.status_code == 200:
+            return True
+        else:
+            return False
+
+    def updateTableSchema(self,workspace_id,dataset_id,table_name,schema):
+        updateTableUrl = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/datasets/{datasetId}/tables/{tableName}".format(
+            groupId = workspace_id,
+            datasetId = dataset_id,
+            tableName = table_name
+        )
+        headers = {
+            'Content-Type': "application/json",           
+            'Authorization': "Bearer " + self.token
+        }
+        response = requests.request("PUT", updateTableUrl, data=schema, headers=headers)
+        print(response.status_code)
+        print(response.text)
+    
+    def getTables(self,workspace_id,dataset_id):
+        tablesUrl = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/datasets/{datasetId}/tables".format(
+            groupId = workspace_id,
+            datasetId = dataset_id
+        )
+        headers = {           
+            'Authorization': "Bearer " + self.token
+        }
+        response = requests.request("GET", tablesUrl, headers=headers)
+        
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return None
 
 
