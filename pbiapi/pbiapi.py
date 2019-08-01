@@ -110,7 +110,7 @@ class PowerBiApiClient:
         pushTable = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/datasets?defaultRetentionPolicy=basicFIFO".format(
             groupId = workspace_id            
         )
-        response = requests.post(pushTable, data=schema, headers=self.headers)
+        response = requests.post(pushTable, data=json.dumps(schema), headers=self.headers)
 
         if response.status_code == 201 or response.status_code == 202:
             return True
@@ -181,7 +181,7 @@ class PowerBiApiClient:
             'Content-Type': "application/json",           
             'Authorization': "Bearer " + self.token
         }
-        response = requests.put(updateTableUrl, data=schema, headers=headers)
+        response = requests.put(updateTableUrl, data=json.dumps(schema), headers=headers)
         print(response.status_code)
         print(response.text)
     
