@@ -9,4 +9,17 @@ from pbiapi import PowerBiApiClient
 ```
 
 Initiate the client by running: 
+```python
+pbi_client = PowerBiApiClient( 
+    <Tenant Id>,
+    <Application Id>,
+    <Service Principal Secret>
+    )
+```
+
+You can then get all the workspaces the Service Principal is admin of by running:
+```python
+pbi_client.getWorkspaces()
+pbi_client.workspaces
+```
 
