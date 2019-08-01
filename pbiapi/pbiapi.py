@@ -154,7 +154,20 @@ class PowerBiApiClient:
             else:
                 print(response.status_code)
                 print(response.text)  
-            
+                retry = 1
+                while retry < 6:
+                    print("Retry attempt: {attempt}".format(attempt=str(retry)))
+                    response = requests.post(postRowsUrl, data=uploadData, headers=self.headers)
+                    if response.status_code == 200:
+                        print('Added rows {start} to {finish}'.format(start=str(rowCursor),finish=str(tempCursor)))
+                        break
+                    else:
+                        retry = retry + 1
+                if retry > 5: 
+                    print("Error trying to add rows, aborting")
+                    break
+                
+                
             rowCursor = tempCursor   
         
     @checkToken
