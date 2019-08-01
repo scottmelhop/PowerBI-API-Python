@@ -5,16 +5,16 @@ import datetime
 
 # DECORATORS
 def checkToken(method_to_decorate):
-    def wrapper(self):     
+    def wrapper(self, *args):     
         #Check for valid token       
         if self.token == None or self.tokenExpiration < datetime.datetime.utcnow():            
             #Try to set token, skip if fails
             if self.setToken():
-                return method_to_decorate(self)
+                return method_to_decorate(self, *args)
             else:
                 pass
         else:
-            return method_to_decorate(self)
+            return method_to_decorate(self, *args)
     return wrapper
 
 class PowerBiApiClient:    
