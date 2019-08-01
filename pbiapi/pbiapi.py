@@ -1,4 +1,21 @@
 import requests
+import json 
+import datetime
+
+
+# DECORATORS
+def checkToken(method_to_decorate):
+    def wrapper(self):     
+        #Check for valid token       
+        if self.token == None or self.tokenExpiration < datetime.datetime.utcnow():            
+            #Try to set token, skip if fails
+            if self.setToken():
+                return method_to_decorate(self)
+            else:
+                pass
+        else:
+            return method_to_decorate(self)
+    return wrapper
 
 class PowerBiApiClient:    
 
@@ -8,7 +25,9 @@ class PowerBiApiClient:
         self.client_secret = client_secret
         self.url = "https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token".format(tenant_id=self.tenant_id)
         self.token = None
+        self.tokenExpiration = None
         self.workspaces = None
+        self.headers = None
 
     def setToken(self):
         payload = {
@@ -21,68 +40,63 @@ class PowerBiApiClient:
             'Content-Type': "application/x-www-form-urlencoded",
         }
 
-        response = requests.request("POST", self.url, data=payload, headers=headers)
+        response = requests.post(self.url, data=payload, headers=headers)
 
         if response.status_code == 200:
             self.token = response.json()['access_token']
+            self.tokenExpiration = datetime.datetime.utcnow() + datetime.timedelta(seconds=3600)  
+
+            self.headers = {
+                'Content-Type': "application/x-www-form-urlencoded",
+                'Authorization': "Bearer " + self.token
+            }           
             return True
         else:
             print(response.status_code)
             print(response.text)
             return False
 
+   
      
-    def getWorkspaces(self):
-        if self.token == None:
+    @checkToken 
+    def getWorkspaces(self):        
+        url = "https://api.powerbi.com/v1.0/myorg/groups" 
+        response = requests.get(url, headers=self.headers)
+        if response.status_code == 200:
+            self.workspaces = response.json()['value']
+            return True
+        else:
             return False
-        else:            
-            url = "https://api.powerbi.com/v1.0/myorg/groups"
-            headers = {
-                'Authorization': "Bearer " + self.token
-                }
-            response = requests.request("GET", url, headers=headers)
-
-            if response.status_code == 200:
-                self.workspaces = response.json()['value']
-                return True
-            else:
-                return False
     
+    @checkToken 
     def findWorkspaceIdByName(self,name):
         if self.workspaces != None:
             return next((item['id'] for item in self.workspaces if item["name"] == name),None)
         else:
             return None
     
+    @checkToken 
     def getDatasetsInWorkspace(self,workspace_id):
-        datasets_url = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/datasets".format(groupId = workspace_id)
-        if self.token != None:
-            headers = {
-                    'Authorization': "Bearer " + self.token
-                    }                
-            response = requests.request("GET", datasets_url, headers=headers)
-            if response.status_code == 200:
-                return response.json()['value']
-            else:
-                return None
-
+        datasets_url = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/datasets".format(groupId = workspace_id)            
+        response = requests.get(datasets_url, headers=self.headers)
+        if response.status_code == 200:
+            return response.json()['value']
         else:
             return None
+
+        
     
     def findDatasetIdByName(self,datasets,name):
         return next((item['id'] for item in datasets if item["name"] == name),None)
         
+    @checkToken    
     def refreshDatasetById(self,workspace_id,dataset_id):
         dataset_refresh = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/datasets/{datasetId}/refreshes".format(
                     groupId = workspace_id, 
                     datasetId = dataset_id
             )
-        headers = {
-            'Content-Type': "application/x-www-form-urlencoded",
-            'Authorization': "Bearer " + self.token
-        }
         payload = "notifyOption=NoNotification"
-        response = requests.request("POST", dataset_refresh, data=payload, headers=headers)
+        response = requests.post(dataset_refresh, data=payload, headers=self.headers)
 
         if response.status_code == 202:
             return True
@@ -91,52 +105,59 @@ class PowerBiApiClient:
             print(response.text)
             return False
     
+    @checkToken
     def createDataset(self,workspace_id,schema):
         pushTable = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/datasets?defaultRetentionPolicy=basicFIFO".format(
             groupId = workspace_id            
         )
-
-        headers = {
-           
-            'Authorization': "Bearer " + self.token
-        } 
-        response = requests.request("POST", pushTable, data=schema, headers=headers)
+        response = requests.post(pushTable, data=schema, headers=self.headers)
 
         if response.status_code == 201 or response.status_code == 202:
             return True
         else:
             return False
         
-
+    @checkToken
     def deleteDataset(self,workspace_id,dataset_id):
         deleteUrl = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/datasets/{datasetId}".format(
             groupId = workspace_id,
             datasetId = dataset_id
         )
-        headers = {           
-            'Authorization': "Bearer " + self.token
-        }
-        response = requests.request("DELETE",deleteUrl,headers=headers)
+        response = requests.delete(deleteUrl,headers=self.headers)
         if response.status_code == 200:
             return True
         else:
             return False
 
-    def postRows(self,workspace_id,dataset_id,table_name,rows):
+    @checkToken
+    def postRows(self,workspace_id,dataset_id,table_name,data):
         postRowsUrl = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/datasets/{datasetId}/tables/{tableName}/rows".format(
             groupId = workspace_id,
             datasetId = dataset_id,
             tableName = table_name
         )
-        headers = {           
-            'Authorization': "Bearer " + self.token
-        }
-        response = requests.request("POST", postRowsUrl, data=rows, headers=headers)
-        if response.status_code == 200:
-            return True
-        else:
-            return False
+   
+        rowCount = len(data)
+        rowCursor = 0
 
+        while rowCursor < rowCount:
+            tempCursor = 0
+            if (rowCursor +  10000) < rowCount:
+                tempCursor = rowCursor +  10000
+            else:
+                tempCursor = rowCount
+
+            uploadData = json.dumps({'rows':data[rowCursor:tempCursor]})
+            response = requests.post(postRowsUrl, data=uploadData, headers=self.headers)
+            if response.status_code == 200:
+                print('Added rows {start} to {finish}'.format(start=str(rowCursor),finish=str(tempCursor)))
+            else:
+                print(response.status_code)
+                print(response.text)  
+            
+            rowCursor = tempCursor   
+        
+    @checkToken
     def updateTableSchema(self,workspace_id,dataset_id,table_name,schema):
         updateTableUrl = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/datasets/{datasetId}/tables/{tableName}".format(
             groupId = workspace_id,
@@ -147,23 +168,35 @@ class PowerBiApiClient:
             'Content-Type': "application/json",           
             'Authorization': "Bearer " + self.token
         }
-        response = requests.request("PUT", updateTableUrl, data=schema, headers=headers)
+        response = requests.put(updateTableUrl, data=schema, headers=headers)
         print(response.status_code)
         print(response.text)
     
+    @checkToken
     def getTables(self,workspace_id,dataset_id):
         tablesUrl = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/datasets/{datasetId}/tables".format(
             groupId = workspace_id,
             datasetId = dataset_id
         )
-        headers = {           
-            'Authorization': "Bearer " + self.token
-        }
-        response = requests.request("GET", tablesUrl, headers=headers)
+        response = requests.get(tablesUrl, headers=self.headers)
         
         if response.status_code == 200:
             return response.json()
         else:
             return None
 
+    @checkToken
+    def truncateTable(self,workspace_id,dataset_id,table_name):
+        truncateTableUrl = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/datasets/{datasetId}/tables/{tableName}/rows".format(
+            groupId = workspace_id,
+            datasetId = dataset_id,
+            tableName = table_name
+        )
+
+        response = requests.delete(truncateTableUrl,headers=self.headers)
+
+        if response.status_code == 200:
+            return True
+        else:
+            return False
 
