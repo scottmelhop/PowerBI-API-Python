@@ -107,14 +107,20 @@ class PowerBiApiClient:
     
     @checkToken
     def createDataset(self,workspace_id,schema):
-        pushTable = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/datasets?defaultRetentionPolicy=basicFIFO".format(
+        pushTable = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/datasets?defaultRetentionPolicy=None".format(
             groupId = workspace_id            
         )
-        response = requests.post(pushTable, data=json.dumps(schema), headers=self.headers)
+        headers = {
+            'Content-Type': "application/json",           
+            'Authorization': "Bearer " + self.token
+        }
+        response = requests.post(pushTable, data=json.dumps(schema), headers=headers)
 
         if response.status_code == 201 or response.status_code == 202:
             return True
         else:
+            print(response.status_code)
+            print(response.text)
             return False
         
     @checkToken
@@ -136,6 +142,10 @@ class PowerBiApiClient:
             datasetId = dataset_id,
             tableName = table_name
         )
+        headers = {
+            'Content-Type': "application/json",           
+            'Authorization': "Bearer " + self.token
+        }
    
         rowCount = len(data)
         rowCursor = 0
@@ -148,7 +158,7 @@ class PowerBiApiClient:
                 tempCursor = rowCount
 
             uploadData = json.dumps({'rows':data[rowCursor:tempCursor]})
-            response = requests.post(postRowsUrl, data=uploadData, headers=self.headers)
+            response = requests.post(postRowsUrl, data=uploadData, headers=headers)
             if response.status_code == 200:
                 print('Added rows {start} to {finish}'.format(start=str(rowCursor),finish=str(tempCursor)))
             else:
@@ -157,7 +167,7 @@ class PowerBiApiClient:
                 retry = 1
                 while retry < 6:
                     print("Retry attempt: {attempt}".format(attempt=str(retry)))
-                    response = requests.post(postRowsUrl, data=uploadData, headers=self.headers)
+                    response = requests.post(postRowsUrl, data=uploadData, headers=headers)
                     if response.status_code == 200:
                         print('Added rows {start} to {finish}'.format(start=str(rowCursor),finish=str(tempCursor)))
                         break
