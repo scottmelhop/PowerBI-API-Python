@@ -106,9 +106,10 @@ class PowerBiApiClient:
             return False
     
     @checkToken
-    def createDataset(self,workspace_id,schema):
-        pushTable = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/datasets?defaultRetentionPolicy=None".format(
-            groupId = workspace_id            
+    def createDataset(self,workspace_id,schema,retention_policy):
+        pushTable = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/datasets?defaultRetentionPolicy={retentionPolicy}".format(
+            groupId = workspace_id,
+            retentionPolicy = retention_policy            
         )
         headers = {
             'Content-Type': "application/json",           
