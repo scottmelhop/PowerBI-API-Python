@@ -57,7 +57,7 @@ class PowerBiApiClient:
             return False
 
    
-     
+    #-----WORKSPACE FUNCTIONS----- 
     @checkToken 
     def getWorkspaces(self):        
         url = "https://api.powerbi.com/v1.0/myorg/groups" 
@@ -67,14 +67,82 @@ class PowerBiApiClient:
             return True
         else:
             return False
-    
-    @checkToken 
+     
     def findWorkspaceIdByName(self,name):
+        self.getWorkspaces()
         if self.workspaces != None:
             return next((item['id'] for item in self.workspaces if item["name"] == name),None)
         else:
             return None
     
+    @checkToken
+    def createWorkspace(self,name):
+        #Check if workspace exists already
+        url = "https://api.powerbi.com/v1.0/myorg/groups?$filter=contains(name,'{name}')".format(name = name)
+        response = requests.get(url, headers=self.headers)
+        
+        if response.status_code != 200:
+            return False
+        else:
+            #Dont reproduce workspace
+            if response.json()['@odata.count'] > 0:
+                print('Dataset already exists')
+                return False
+            #Try to create workspace
+            else:
+                print('Creating a workspace')
+                url = "https://api.powerbi.com/v1.0/myorg/groups?workspaceV2=true"
+                payload = {
+                    "name":name
+                }
+                response = requests.post(url, data=payload, headers=self.headers)
+
+                if response.status_code == 200:
+                    print("Created workspace: ",name)
+                    self.getWorkspaces()
+                    return True
+                else:
+                    print("Error Creating workspace")
+                    print(response.text)
+                    return False
+        
+    @checkToken
+    def addUsersToWorkspace(self,name,users):
+        self.getWorkspaces()
+        workspaceId = self.findWorkspaceIdByName(name)
+
+        if workspaceId:
+            url = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/users".format(groupId = workspaceId)
+            
+            response = requests.post(url, data=users, headers=self.headers)
+            if response.status_code == 200:
+                print("Added users to workspace")
+                return True
+            else:
+                print("Error adding users to workspace")
+                print(response.text)
+                return False
+        else:
+            return False
+
+    @checkToken
+    def deleteWorkspace(self, workspaceName):
+        workspaceId = self.findWorkspaceIdByName(workspaceName)
+
+        if workspaceId == None:
+            return False
+        
+        url = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}".format(groupId = workspaceId)
+
+        response = requests.delete(url=url, headers=self.headers)
+
+        if response.status_code == 200:
+            print("Workspace Deleted")
+            return True
+        else:
+            return False
+
+    #-----DATASET FUNCTIONS----- 
     @checkToken 
     def getDatasetsInWorkspace(self,workspace_id):
         datasets_url = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/datasets".format(groupId = workspace_id)            
@@ -83,9 +151,7 @@ class PowerBiApiClient:
             return response.json()['value']
         else:
             return None
-
-        
-    
+            
     def findDatasetIdByName(self,datasets,name):
         return next((item['id'] for item in datasets if item["name"] == name),None)
         
@@ -106,7 +172,7 @@ class PowerBiApiClient:
             return False
     
     @checkToken
-    def createDataset(self,workspace_id,schema,retention_policy):
+    def createPushDataset(self,workspace_id,schema,retention_policy):
         pushTable = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/datasets?defaultRetentionPolicy={retentionPolicy}".format(
             groupId = workspace_id,
             retentionPolicy = retention_policy            
@@ -223,4 +289,112 @@ class PowerBiApiClient:
             return True
         else:
             return False
+
+    #------REPORT FUNCTIONS------
+
+    @checkToken
+    def getReportsInWorkspace(self,workspaceName):
+        workspaceId = self.findWorkspaceIdByName(workspaceName)
+
+        if workspaceId == None:
+            return None
+        
+        url = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/reports".format(groupId = workspaceId)
+        response = requests.get(url=url,headers=self.headers)
+
+        if response.status_code == 200:
+            return response.json()['value']
+
+    def findReportIdByName(self,reports,name):
+        return next((item['id'] for item in reports if item["name"] == name),None)
+
+    
+
+    @checkToken
+    def deleteReport(self,workspaceName,reportName):
+        workspaceId = self.findWorkspaceIdByName(workspaceName)
+
+        if workspaceId == None:
+            return False
+        reports = self.getReportsInWorkspace(workspaceName)
+        reportId = self.findReportIdByName(reports,reportName)
+
+        if reportId == None:
+            return False
+
+        url = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/reports/{reportId}".format(groupId = workspaceId, reportId = reportId)
+        response = requests.delete(url = url, headers = self.headers)
+
+        if response.status_code == 200:
+            print("Report deleted")
+            return True
+        else:
+            return False
+
+        
+
+    #------IMPORT DATASETS AND REPORTS------
+    @checkToken
+    def importFileIntoWorkspace(self, workspaceName, skipReport, filePath, displayName):
+        
+        workspaceId = self.findWorkspaceIdByName(workspaceName)
+
+        #Check for workspace
+        if workspaceId == None:
+            return False
+
+        url = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/imports?datasetDisplayName={datasetDisplayName}&nameConflict={nameConflict}&skipReport={skipReport}".format(
+            groupId = workspaceId,
+            nameConflict = 'CreateOrOverwrite',
+            skipReport = skipReport,
+            datasetDisplayName = displayName
+        )
+
+        headers = {
+            'Content-Type': "multipart/form-data",           
+            'Authorization': "Bearer " + self.token
+        }   
+
+        #Attempt to load the file
+        try:
+            files = {
+                'filename': open(filePath, 'rb')
+            }
+        except:
+            print('Could not open file')
+            return False
+        
+
+        response = requests.post(url=url,headers=headers,files=files)   
+
+        if response.status_code == 202:
+            print(response.json())
+            importId = response.json()['id']
+            print("File Uploading. Id: ",importId)
+            return True
+        else:
+            return False
+
+            # This code doesnt work yet, keeps returning 403 
+            # get_import_url = "https://api.powerbi.com/v1.0/myorg/imports/{importId}".format(importId = importId)
+            # print(get_import_url)
+
+            # while True:
+            #     response = requests.get(url=get_import_url,headers=self.headers)
+                
+            #     if response.status_code != 200:
+            #         print(response.content)
+            #         return False
+
+            #     if response.json()['importState'] == "Succeeded":
+            #         print("Import complete")
+            #         return True
+            #     else:
+            #         print("Import in progress...")
+
+
+                
+        
+
+        
 

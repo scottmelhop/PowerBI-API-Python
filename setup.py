@@ -5,7 +5,7 @@ with open("README.md","r") as fh:
 
 setuptools.setup(
     name="pbiapi",
-    version="0.0.2",
+    version="0.0.3",
     author="Scott Melhop",
     author_email="scott.melhop@gmail.com",
     description="A Python library for working with the Power BI API",
