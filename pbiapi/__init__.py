@@ -1,3 +1,3 @@
 name = "pbiapi"
 
-from . pbiapi import PowerBiApiClient
+from .pbiapi import PowerBIAPIClient

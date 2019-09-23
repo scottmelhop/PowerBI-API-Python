@@ -11,21 +11,20 @@ pip install pbiapi
 Add the client to your project with:
 
 ```python
-from pbiapi import PowerBiApiClient
+from pbiapi import PowerBIAPIClient
 ```
 
-Initiate the client by running: 
+Initiate the client by running:
 ```python
-pbi_client = PowerBiApiClient( 
+pbi_client = PowerBIAPIClient(
     <Tenant Id>,
     <Application Id>,
     <Service Principal Secret>
-    )
+)
 ```
 
 You can then get all the workspaces the Service Principal is admin of by running:
 ```python
-pbi_client.getWorkspaces()
+pbi_client.get_workspaces()
 pbi_client.workspaces
 ```
-
