@@ -1,8 +1,10 @@
 import datetime
-import json
-from typing import Callable
+import os
+from typing import Callable, NoReturn
 
 import requests
+
+from utils import partition
 
 
 def check_token(fn: Callable):
@@ -10,6 +12,7 @@ def check_token(fn: Callable):
         if self.token is None or self.token_expiration < datetime.datetime.utcnow():
             self.set_token()
         return fn(self, *args, **kwargs)
+
     return wrapper
 
 
@@ -18,6 +21,7 @@ class PowerBIAPIClient:
         self.tenant_id = tenant_id
         self.client_id = client_id
         self.client_secret = client_secret
+        self.base_url = "https://api.powerbi.com/v1.0/myorg/"
         self.url = f"https://login.microsoftonline.com/{self.tenant_id}/oauth2/v2.0/token"
         self.token = None
         self.token_expiration = None
@@ -42,7 +46,7 @@ class PowerBIAPIClient:
                 "Authorization": f"Bearer {self.token}",
             }
         else:
-            print(f"Expected 200 response code when trying to set token, got {response.status_code}: {response.text}.")
+            print(f"Expected response code 200 when trying to set token, got {response.status_code}: {response.text}.")
 
     @property
     def workspaces(self):
@@ -50,15 +54,13 @@ class PowerBIAPIClient:
 
     @check_token
     def get_workspaces(self):
-        url = "https://api.powerbi.com/v1.0/myorg/groups"
+        url = self.base_url + "groups"
         response = requests.get(url, headers=self.headers)
-        response.raise_for_status()
 
         if response.status_code == 200:
             self._workspaces = response.json()["value"]
             return self._workspaces
-        else:
-            raise requests.HTTPError(response)
+        self.force_raise_http_error(response)
 
     def find_workspace_id_by_name(self, name):
         if self._workspaces is not None:
@@ -67,76 +69,81 @@ class PowerBIAPIClient:
                     return item["id"]
 
     @check_token
-    def createWorkspace(self,name):
-        #Check if workspace exists already
-        url = "https://api.powerbi.com/v1.0/myorg/groups?$filter=contains(name,'{name}')".format(name = name)
+    def create_workspace(self, name):
+        # Check if workspace exists already:
+        url = self.base_url + f"groups?$filter=contains(name,'{name}')"
         response = requests.get(url, headers=self.headers)
 
         if response.status_code != 200:
-            return False
-        else:
-            #Dont reproduce workspace
-            if response.json()['@odata.count'] > 0:
-                print('Dataset already exists')
-                return False
-            #Try to create workspace
-            else:
-                print('Creating a workspace')
-                url = "https://api.powerbi.com/v1.0/myorg/groups?workspaceV2=true"
-                payload = {
-                    "name":name
-                }
-                response = requests.post(url, data=payload, headers=self.headers)
+            print(
+                "Expected response code 200 when checking if the workspace already exists, "
+                f"got {response.status_code}: {response.text}."
+            )
+            self.force_raise_http_error(response)
 
-                if response.status_code == 200:
-                    print("Created workspace: ",name)
-                    self.getWorkspaces()
-                    return True
-                else:
-                    print("Error Creating workspace")
-                    print(response.text)
-                    return False
+        if response.json()["@odata.count"] > 0:
+            print("Workspace already exists; no changes made!")
+            return
 
-    @checkToken
-    def addUsersToWorkspace(self,name,users):
-        self.getWorkspaces()
-        workspaceId = self.findWorkspaceIdByName(name)
-
-        if workspaceId:
-            url = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/users".format(groupId = workspaceId)
-
-            response = requests.post(url, data=users, headers=self.headers)
-            if response.status_code == 200:
-                print("Added users to workspace")
-                return True
-            else:
-                print("Error adding users to workspace")
-                print(response.text)
-                return False
-        else:
-            return False
-
-    @checkToken
-    def deleteWorkspace(self, workspaceName):
-        workspaceId = self.findWorkspaceIdByName(workspaceName)
-
-        if workspaceId == None:
-            return False
-
-        url = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}".format(groupId = workspaceId)
-
-        response = requests.delete(url=url, headers=self.headers)
+        # Workspace does not exist, lets create it:
+        print(f"Trying to create a workspace with name: {name}...")
+        url = self.base_url + "groups?workspaceV2=true"
+        response = requests.post(url, data={"name": name}, headers=self.headers)
 
         if response.status_code == 200:
-            print("Workspace Deleted")
-            return True
+            print("Workspace created successfully!")
+            self.get_workspaces()  # Update internal state
+            return
         else:
-            return False
+            print(
+                "Expected response code 200 when trying to create the new workspace, "
+                f"got {response.status_code}: {response.text}."
+            )
+            self.force_raise_http_error(response)
+
+    @check_token
+    def add_users_to_workspace(self, workspace_name, users):
+        self.get_workspaces()
+        workspace_id = self.find_workspace_id_by_name(workspace_name)
+
+        if workspace_id is None:
+            raise RuntimeError(f"No workspace named '{workspace_name}', thus adding users to it failed!")
+
+        # Workspace exists, lets add users:
+        url = self.base_url + f"groups/{workspace_id}/users"
+        response = requests.post(url, data=users, headers=self.headers)
+
+        if response.status_code == 200:
+            print(f"Added users to workspace '{workspace_name}'")
+            return
+        else:
+            print(
+                f"Expected response code 200 when trying to add users to workspace '{workspace_name}', "
+                f"got {response.status_code}: {response.text}."
+            )
+            self.force_raise_http_error(response)
+
+    @check_token
+    def delete_workspace(self, workspace_name):
+        workspace_id = self.find_workspace_id_by_name(workspace_name)
+
+        if workspace_id is None:
+            raise RuntimeError(f"No workspace named '{workspace_name}', thus adding users to it failed!")
+
+        url = self.base_url + "groups/{workspace_id}"
+        response = requests.delete(url, headers=self.headers)
+
+        if response.status_code == 200:
+            print("Workspace deleted successfully!")
+        else:
+            print("Workspace deletion failed:")
+            self.force_raise_http_error(response)
 
     @check_token
     def get_datasets_in_workspace(self, workspace_id):
-        datasets_url = f"https://api.powerbi.com/v1.0/myorg/groups/{workspace_id}/datasets"
+        datasets_url = self.base_url + f"groups/{workspace_id}/datasets"
         response = requests.get(datasets_url, headers=self.headers)
+        response.raise_for_status()
         if response.status_code == 200:
             return response.json()["value"]
 
@@ -147,239 +154,193 @@ class PowerBIAPIClient:
 
     @check_token
     def refresh_dataset_by_id(self, workspace_id, dataset_id):
-        url = f"https://api.powerbi.com/v1.0/myorg/groups/{workspace_id}/datasets/{dataset_id}/refreshes"
+        url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}/refreshes"
         payload = "notifyOption=NoNotification"
         response = requests.post(url, data=payload, headers=self.headers)
 
-        if response.status_code != 202:
+        if response.status_code == 202:
+            print(f"Dataset with id {dataset_id} (and workspace id {workspace_id}) was updated!")
+        else:
             print("Expected 202 response code, got {response.status_code}: {response.text}")
-
-        return response.status_code == 202
+            self.force_raise_http_error(response)
 
     @check_token
-    def create_push_dataset(self, workspace_id, schema, retention_policy):
-        pushTable = (
-            f"https://api.powerbi.com/v1.0/myorg/groups/{workspace_id}/datasets?"
-            f"defaultRetentionPolicy={retention_policy}"
-        )
+    def create_push_dataset(self, workspace_id, retention_policy):
+        url = self.base_url + f"groups/{workspace_id}/datasets?defaultRetentionPolicy={retention_policy}"
         payload = "notifyOption=NoNotification"
         response = requests.post(url, data=payload, headers=self.headers)
 
-        if response.status_code != 202:
+        if response.status_code == 202:
+            print(
+                f"Create push dataset successful using workspace_id: {workspace_id} and "
+                f"retention_policy: {retention_policy}"
+            )
+        else:
             print("Expected 202 response code, got {response.status_code}: {response.text}")
-
-        return response.status_code == 202
+            self.force_raise_http_error(response)
 
     @check_token
     def create_dataset(self, workspace_id, schema, retention_policy):
-        url = (
-            f"https://api.powerbi.com/v1.0/myorg/groups/{workspace_id}/datasets?"
-            f"defaultRetentionPolicy={retention_policy}"
-        )
+        url = self.base_url + f"groups/{workspace_id}/datasets?defaultRetentionPolicy={retention_policy}"
         headers = {"Authorization": f"Bearer {self.token}"}
         response = requests.post(url, json=schema, headers=headers)
 
-        if response.status_code not in [201, 202]:
-            print("Expected 201 or 202 response code, got {response.status_code}: {response.text}")
-
-        return response.status_code in [201, 202]
+        if response.status_code in [201, 202]:
+            print(
+                f"Create dataset successful using workspace_id: {workspace_id}, schema: {schema} "
+                f"and retention_policy: {retention_policy}"
+            )
+        else:
+            print(f"Expected response code 201 or 202, got {response.status_code}: {response.text}")
+            self.force_raise_http_error(response)
 
     @check_token
     def delete_dataset(self, workspace_id, dataset_id):
-        url = f"https://api.powerbi.com/v1.0/myorg/groups/{workspace_id}/datasets/{dataset_id}"
+        url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}"
         response = requests.delete(url, headers=self.headers)
-        return response.status_code == 200
+        if response.status_code == 200:
+            print("Dataset with id: {dataset_id} in workspace with id: {workspace_id} deleted successfully!")
+        else:
+            print(f"Expected response code 200, got {response.status_code}: {response.text}")
+            self.force_raise_http_error(response)
 
     @check_token
-    def post_rows(self, workspace_id, dataset_id, table_name, data):
-        url = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/datasets/{datasetId}/tables/{tableName}/rows".format(
-            groupId=workspace_id, datasetId=dataset_id, tableName=table_name
-        )
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": "Bearer " + self.token,
-        }
+    def post_rows(self, workspace_id, dataset_id, table_name, data, chunk_size: int = 10000):
+        url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}/tables/{table_name}/rows"
+        headers = {"Authorization": f"Bearer {self.token}"}
 
-        rowCount = len(data)
-        rowCursor = 0
+        chunked_data = partition(data, n=chunk_size)
+        tot_chunks = len(chunked_data)
 
-        while rowCursor < rowCount:
-            tempCursor = 0
-            if (rowCursor + 10000) < rowCount:
-                tempCursor = rowCursor + 10000
-            else:
-                tempCursor = rowCount
-
-            uploadData = json.dumps({"rows": data[rowCursor:tempCursor]})
-            response = requests.post(url, data=uploadData, headers=headers)
+        for i, row_chunk in enumerate(chunked_data, 1):
+            response = requests.post(url, json={"rows": row_chunk}, headers=headers)
             if response.status_code == 200:
-                print(
-                    "Added rows {start} to {finish}".format(
-                        start=str(rowCursor), finish=str(tempCursor)
-                    )
-                )
+                print(f"Chunk [i/{tot_chunks}] inserted successfully! Size: {len(row_chunk)} rows")
             else:
-                print(response.status_code)
-                print(response.text)
-                retry = 1
-                while retry < 6:
-                    print("Retry attempt: {attempt}".format(attempt=str(retry)))
-                    response = requests.post(
-                        url, data=uploadData, headers=headers
-                    )
-                    if response.status_code == 200:
-                        print(
-                            "Added rows {start} to {finish}".format(
-                                start=str(rowCursor), finish=str(tempCursor)
-                            )
-                        )
-                        break
-                    else:
-                        retry = retry + 1
-                if retry > 5:
-                    print("Error trying to add rows, aborting")
-                    break
-
-            rowCursor = tempCursor
+                print(
+                    "Row insertion failed! Expected response code 200, got " f"{response.status_code}: {response.text}"
+                )
+                self.force_raise_http_error(response)
 
     @check_token
-    def updateTableSchema(self, workspace_id, dataset_id, table_name, schema):
-        updateTableUrl = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/datasets/{datasetId}/tables/{tableName}".format(
-            groupId=workspace_id, datasetId=dataset_id, tableName=table_name
-        )
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": "Bearer " + self.token,
-        }
-        response = requests.put(
-            updateTableUrl, data=json.dumps(schema), headers=headers
-        )
-        print(response.status_code)
-        print(response.text)
+    def update_table_schema(self, workspace_id, dataset_id, table_name, schema):
+        url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}/tables/{table_name}"
+        headers = {"Authorization": f"Bearer {self.token}"}
+        response = requests.put(url, json=schema, headers=headers)
+        # TODO(scottmelhop): Use/check/raise depending on status code?
+        print(f"Update table schema returned status code {response.status_code}: {response.text}")
 
     @check_token
-    def getTables(self, workspace_id, dataset_id):
-        tablesUrl = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/datasets/{datasetId}/tables".format(
-            groupId=workspace_id, datasetId=dataset_id
-        )
-        response = requests.get(tablesUrl, headers=self.headers)
+    def get_tables(self, workspace_id, dataset_id):
+        url = self.base_url + "groups/{workspace_id}/datasets/{dataset_id}/tables"
+        response = requests.get(url, headers=self.headers)
 
         if response.status_code == 200:
             return response.json()
-        else:
-            return None
 
     @check_token
-    def truncateTable(self, workspace_id, dataset_id, table_name):
-        truncateTableUrl = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/datasets/{datasetId}/tables/{tableName}/rows".format(
-            groupId=workspace_id, datasetId=dataset_id, tableName=table_name
+    def truncate_table(self, workspace_id, dataset_id, table_name):
+        url = self.base_url + "groups/{workspace_id}/datasets/{dataset_id}/tables/{table_name}/rows"
+        response = requests.delete(url, headers=self.headers)
+
+        if response.status_code == 200:
+            print("Table truncation successful!")
+        else:
+            print(
+                "Table truncation failed! Expected response code 200, got " f"{response.status_code}: {response.text}"
+            )
+            self.force_raise_http_error(response)
+
+    @check_token
+    def get_reports_in_workspace(self, workspace_name):
+        workspace_id = self.find_workspace_id_by_name(workspace_name)
+
+        if workspace_id is None:
+            raise RuntimeError(f"Fetching reports failed as no workspace is named '{workspace_name}'!")
+
+        url = self.base_url + f"groups/{workspace_id}/reports"
+        response = requests.get(url, headers=self.headers)
+
+        if response.status_code == 200:
+            return response.json()["value"]
+
+    def find_report_id_by_name(self, reports, name):
+        for item in reports:
+            if item["name"] == name:
+                return item["id"]
+
+    @check_token
+    def delete_report(self, workspace_name, report_name):
+        workspace_id = self.find_workspace_id_by_name(workspace_name)
+
+        if workspace_id is None:
+            raise RuntimeError(f"Deleting report failed as no workspace is named '{workspace_name}'!")
+
+        reports = self.get_reports_in_workspace(workspace_name)
+        report_id = self.find_report_id_by_name(reports, report_name)
+
+        if report_id is None:
+            raise RuntimeError(
+                f"Deleting report failed as no report is named '{report_name}' in workspace '{workspace_name}'!"
+            )
+
+        url = self.base_url + f"groups/{workspace_id}/reports/{report_id}"
+        response = requests.delete(url, headers=self.headers)
+
+        if response.status_code == 200:
+            print("Report named '{report_name}' in workspace '{workspace_name}' deleted successfully!")
+        else:
+            print(f"Report deletion failed! Expected response code 200, got {response.status_code}: {response.text}")
+            self.force_raise_http_error(response)
+
+    @check_token
+    def import_file_into_workspace(self, workspace_name, skip_report, file_path, display_name):
+        workspace_id = self.find_workspace_id_by_name(workspace_name)
+
+        if workspace_id is None:
+            raise RuntimeError(f"Importing file into workspace failed as workspace '{workspace_name}' does not exists!")
+
+        name_conflict = "CreateOrOverwrite"
+        url = (
+            self.base_url
+            + f"groups/{workspace_id}/imports?datasetDisplayName={display_name}&nameConflict="
+            + f"{name_conflict}&skipReport={skip_report}"
         )
 
-        response = requests.delete(truncateTableUrl, headers=self.headers)
+        headers = {"Content-Type": "multipart/form-data", "Authorization": "Bearer " + self.token}
 
-        if response.status_code == 200:
-            return True
-        else:
-            return False
+        if not os.path.isfile(file_path):
+            raise FileNotFoundError(2, f"No such file or directory: '{file_path}'")
 
-    #------REPORT FUNCTIONS------
-
-    @checkToken
-    def getReportsInWorkspace(self,workspaceName):
-        workspaceId = self.findWorkspaceIdByName(workspaceName)
-
-        if workspaceId == None:
-            return None
-
-        url = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/reports".format(groupId = workspaceId)
-        response = requests.get(url=url,headers=self.headers)
-
-        if response.status_code == 200:
-            return response.json()['value']
-
-    def findReportIdByName(self,reports,name):
-        return next((item['id'] for item in reports if item["name"] == name),None)
-
-
-
-    @checkToken
-    def deleteReport(self,workspaceName,reportName):
-        workspaceId = self.findWorkspaceIdByName(workspaceName)
-
-        if workspaceId == None:
-            return False
-        reports = self.getReportsInWorkspace(workspaceName)
-        reportId = self.findReportIdByName(reports,reportName)
-
-        if reportId == None:
-            return False
-
-        url = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/reports/{reportId}".format(groupId = workspaceId, reportId = reportId)
-        response = requests.delete(url = url, headers = self.headers)
-
-        if response.status_code == 200:
-            print("Report deleted")
-            return True
-        else:
-            return False
-
-
-
-    #------IMPORT DATASETS AND REPORTS------
-    @checkToken
-    def importFileIntoWorkspace(self, workspaceName, skipReport, filePath, displayName):
-
-        workspaceId = self.findWorkspaceIdByName(workspaceName)
-
-        #Check for workspace
-        if workspaceId == None:
-            return False
-
-        url = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/imports?datasetDisplayName={datasetDisplayName}&nameConflict={nameConflict}&skipReport={skipReport}".format(
-            groupId = workspaceId,
-            nameConflict = 'CreateOrOverwrite',
-            skipReport = skipReport,
-            datasetDisplayName = displayName
-        )
-
-        headers = {
-            'Content-Type': "multipart/form-data",
-            'Authorization': "Bearer " + self.token
-        }
-
-        #Attempt to load the file
-        try:
-            files = {
-                'filename': open(filePath, 'rb')
-            }
-        except:
-            print('Could not open file')
-            return False
-
-
-        response = requests.post(url=url,headers=headers,files=files)
+        with open(file_path, "rb") as f:
+            response = requests.post(url, headers=headers, files={"filename": f})
 
         if response.status_code == 202:
             print(response.json())
-            importId = response.json()['id']
-            print("File Uploading. Id: ",importId)
-            return True
+            import_id = response.json()["id"]
+            print(f"File uploading with id: {import_id}")
+            return
         else:
             return False
 
             # This code doesnt work yet, keeps returning 403
-            # get_import_url = "https://api.powerbi.com/v1.0/myorg/imports/{importId}".format(importId = importId)
+            # get_import_url = self.base_url + f"imports/{import_id}"
             # print(get_import_url)
-
+            #
             # while True:
             #     response = requests.get(url=get_import_url,headers=self.headers)
-
+            #
             #     if response.status_code != 200:
             #         print(response.content)
             #         return False
-
+            #
             #     if response.json()['importState'] == "Succeeded":
             #         print("Import complete")
             #         return True
             #     else:
             #         print("Import in progress...")
+
+    @staticmethod
+    def force_raise_http_error(response: requests.Response) -> NoReturn:
+        response.raise_for_status()
+        raise requests.HTTPError(response)
