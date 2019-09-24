@@ -19,12 +19,13 @@ Initiate the client by running:
 pbi_client = PowerBIAPIClient(
     <Tenant Id>,
     <Application Id>,
-    <Service Principal Secret>
+    <Service Principal Secret>,
 )
 ```
 
 You can then get all the workspaces the Service Principal is admin of by running:
 ```python
 pbi_client.get_workspaces()
+# Or access attribute directly:
 pbi_client.workspaces
 ```
