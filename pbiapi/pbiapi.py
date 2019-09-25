@@ -10,10 +10,10 @@ HTTP_OK_CODE = 200
 
 
 def check_token(fn: Callable) -> Callable:
-    def wrapper(self, *args, **kwargs):
-        if self.token is None or self.token_expiration < datetime.datetime.utcnow():
-            self.update_token()
-        return fn(self, *args, **kwargs)
+    def wrapper(pbi_client, *args, **kwargs):
+        if pbi_client.token is None or pbi_client.token_expiration < datetime.datetime.utcnow():
+            pbi_client.update_token()
+        return fn(pbi_client, *args, **kwargs)
 
     return wrapper
 
@@ -32,6 +32,10 @@ class PowerBIAPIClient:
 
     def get_auth_header(self) -> Dict[str, str]:
         return {"Authorization": f"Bearer {self.token}"}
+
+    @check_token
+    def bogus(self, *args, **kwargs):
+        return 123
 
     def update_token(self) -> None:
         payload = {
