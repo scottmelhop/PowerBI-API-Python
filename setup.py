@@ -1,11 +1,11 @@
 import setuptools
 
-with open("README.md","r") as fh:
+with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
     name="pbiapi",
-    version="0.0.3",
+    version="0.1.0",
     author="Scott Melhop",
     author_email="scott.melhop@gmail.com",
     description="A Python library for working with the Power BI API",
