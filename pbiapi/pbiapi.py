@@ -1,6 +1,7 @@
 import datetime
 import os
 from typing import Callable, Dict, List, NoReturn, Union
+from urllib import parse
 
 import requests
 
@@ -80,7 +81,7 @@ class PowerBIAPIClient:
     @check_token
     def create_workspace(self, name):
         # Check if workspace exists already:
-        url = self.base_url + f"groups?$filter=name%20eq%20'{name}'"
+        url = self.base_url + "groups?$filter=" + parse.quote(f"name eq '{name}'")
         response = requests.get(url, headers=self.headers)
 
         if response.status_code != HTTP_OK_CODE:
@@ -121,20 +122,16 @@ class PowerBIAPIClient:
     @check_token
     def get_users_from_workspace(self, name):
         self.get_workspaces()
-        workspace_id = self.find_workspace_id_by_name(name)
+        workspace_id = self.find_workspace_id_by_name(name, raise_if_missing=True)
 
-        if workspace_id:
-            url = "https://api.powerbi.com/v1.0/myorg/groups/{groupId}/users".format(groupId=workspace_id)
+        url = self.base_url + f"groups/{workspace_id}/users"
 
-            response = requests.get(url, headers=self.headers)
-            if response.status_code == 200:
-                return response.json()['value']
-            else:
-                print("Error getting users from workspace")
-                print(response.text)
-                return []
+        response = requests.get(url, headers=self.headers)
+        if response.status_code == 200:
+            return response.json()['value']
         else:
-            return []
+            print("Error getting users from workspace")
+            self.force_raise_http_error(response)
 
     @check_token
     def delete_workspace(self, workspace_name):
