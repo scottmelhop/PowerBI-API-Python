@@ -1,6 +1,7 @@
 import datetime
 import os
 from typing import Callable, Dict, List, NoReturn, Union
+from urllib import parse
 
 import requests
 
@@ -80,7 +81,7 @@ class PowerBIAPIClient:
     @check_token
     def create_workspace(self, name):
         # Check if workspace exists already:
-        url = self.base_url + f"groups?$filter=contains(name,'{name}')"
+        url = self.base_url + "groups?$filter=" + parse.quote(f"name eq '{name}'")
         response = requests.get(url, headers=self.headers)
 
         if response.status_code != HTTP_OK_CODE:
@@ -104,18 +105,32 @@ class PowerBIAPIClient:
             self.force_raise_http_error(response)
 
     @check_token
-    def add_users_to_workspace(self, workspace_name, users):
+    def add_user_to_workspace(self, workspace_name, user):
         self.get_workspaces()
         workspace_id = self.find_workspace_id_by_name(workspace_name, raise_if_missing=True)
 
-        # Workspace exists, lets add users:
+        # Workspace exists, lets add user:
         url = self.base_url + f"groups/{workspace_id}/users"
-        response = requests.post(url, data=users, headers=self.headers)
+        response = requests.post(url, data=user, headers=self.headers)
 
         if response.status_code == HTTP_OK_CODE:
             print(f"Added users to workspace '{workspace_name}'")
         else:
             print(f"Failed to add users to workspace '{workspace_name}':")
+            self.force_raise_http_error(response)
+
+    @check_token
+    def get_users_from_workspace(self, name):
+        self.get_workspaces()
+        workspace_id = self.find_workspace_id_by_name(name, raise_if_missing=True)
+
+        url = self.base_url + f"groups/{workspace_id}/users"
+
+        response = requests.get(url, headers=self.headers)
+        if response.status_code == 200:
+            return response.json()['value']
+        else:
+            print("Error getting users from workspace")
             self.force_raise_http_error(response)
 
     @check_token
