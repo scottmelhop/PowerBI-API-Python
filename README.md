@@ -4,7 +4,7 @@ This python package consists of helper functions for working with the Power BI A
 ## Basic Usage
 
 Install using pip
-```python
+```sh
 pip install pbiapi
 ```
 
@@ -26,6 +26,7 @@ pbi_client = PowerBIAPIClient(
 You can then get all the workspaces the Service Principal is admin of by running:
 ```python
 pbi_client.get_workspaces()
+
 # Or access attribute directly:
 pbi_client.workspaces
 ```

@@ -1,6 +1,5 @@
 .vscode
 __pycache__/
-test.py
 build
 pbiapi.egg-info/
 ignore
