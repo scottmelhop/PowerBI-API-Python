@@ -2,7 +2,7 @@ import datetime
 import os
 from typing import Callable, Dict, List, NoReturn, Union
 from urllib import parse
-
+import time
 import requests
 
 from .utils import partition
@@ -33,10 +33,6 @@ class PowerBIAPIClient:
 
     def get_auth_header(self) -> Dict[str, str]:
         return {"Authorization": f"Bearer {self.token}"}
-
-    @check_token
-    def bogus(self, *args, **kwargs):
-        return 123
 
     def update_token(self) -> None:
         payload = {
@@ -311,26 +307,21 @@ class PowerBIAPIClient:
             print(response.json())
             import_id = response.json()["id"]
             print(f"File uploading with id: {import_id}")
-            return
         else:
-            return False
+            self.force_raise_http_error(response)
 
-            # This code doesnt work yet, keeps returning 403
-            # get_import_url = self.base_url + f"imports/{import_id}"
-            # print(get_import_url)
-            #
-            # while True:
-            #     response = requests.get(url=get_import_url,headers=self.headers)
-            #
-            #     if response.status_code != 200:
-            #         print(response.content)
-            #         return False
-            #
-            #     if response.json()['importState'] == "Succeeded":
-            #         print("Import complete")
-            #         return True
-            #     else:
-            #         print("Import in progress...")
+        get_import_url = self.base_url + f"groups/{workspace_id}/imports/{import_id}"
+
+        while True:
+            response = requests.get(url=get_import_url,headers=self.headers)
+            if response.status_code != 200:
+                self.force_raise_http_error(response)
+
+            if response.json()['importState'] == "Succeeded":
+                print("Import complete")
+                return
+            else:
+                print("Import in progress...")
 
     @staticmethod
     def force_raise_http_error(
