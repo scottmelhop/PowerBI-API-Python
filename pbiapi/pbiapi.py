@@ -1,6 +1,6 @@
 import datetime
+import logging
 import os
-import time
 from typing import Callable, Dict, List, NoReturn, Union
 from urllib import parse
 
@@ -65,7 +65,7 @@ class PowerBIAPIClient:
             self._workspaces = response.json()["value"]
             return self._workspaces
         else:
-            print("Failed to fetch workspaces!")
+            logging.error("Failed to fetch workspaces!")
             self.force_raise_http_error(response)
 
     def find_workspace_id_by_name(self, name: str, raise_if_missing: bool = False):
@@ -82,23 +82,23 @@ class PowerBIAPIClient:
         response = requests.get(url, headers=self.headers)
 
         if response.status_code != HTTP_OK_CODE:
-            print(f"Failed when checking if the workspace, '{name}' already exists!")
+            logging.error(f"Failed when checking if the workspace, '{name}' already exists!")
             self.force_raise_http_error(response)
 
         if response.json()["@odata.count"] > 0:
-            print("Workspace already exists, no changes made!")
+            logging.info("Workspace already exists, no changes made!")
             return
 
         # Workspace does not exist, lets create it:
-        print(f"Trying to create a workspace with name: {name}...")
+        logging.info(f"Trying to create a workspace with name: {name}...")
         url = self.base_url + "groups?workspaceV2=true"
         response = requests.post(url, data={"name": name}, headers=self.headers)
 
         if response.status_code == HTTP_OK_CODE:
-            print("Workspace created successfully!")
+            logging.info("Workspace created successfully!")
             self.get_workspaces()  # Update internal state
         else:
-            print(f"Failed to create the new workspace: '{name}':")
+            logging.error(f"Failed to create the new workspace: '{name}':")
             self.force_raise_http_error(response)
 
     @check_token
@@ -111,9 +111,9 @@ class PowerBIAPIClient:
         response = requests.post(url, data=user, headers=self.headers)
 
         if response.status_code == HTTP_OK_CODE:
-            print(f"Added users to workspace '{workspace_name}'")
+            logging.info(f"Added users to workspace '{workspace_name}'")
         else:
-            print(f"Failed to add user to workspace '{workspace_name}': {user}")
+            logging.error(f"Failed to add user to workspace '{workspace_name}': {user}")
             self.force_raise_http_error(response)
 
     @check_token
@@ -127,7 +127,7 @@ class PowerBIAPIClient:
         if response.status_code == 200:
             return response.json()["value"]
         else:
-            print("Error getting users from workspace")
+            logging.error("Error getting users from workspace")
             self.force_raise_http_error(response)
 
     @check_token
@@ -142,9 +142,9 @@ class PowerBIAPIClient:
         response = requests.delete(url, headers=self.headers)
 
         if response.status_code == HTTP_OK_CODE:
-            print("Workspace deleted successfully!")
+            logging.info("Workspace deleted successfully!")
         else:
-            print("Workspace deletion failed:")
+            logging.error("Workspace deletion failed:")
             self.force_raise_http_error(response)
 
     @check_token
@@ -166,9 +166,9 @@ class PowerBIAPIClient:
         response = requests.post(url, data="notifyOption=NoNotification", headers=self.headers)
 
         if response.status_code == 202:
-            print(f"Dataset with id {dataset_id} (and workspace id {workspace_id}) was updated!")
+            logging.info(f"Dataset with id {dataset_id} (and workspace id {workspace_id}) was updated!")
         else:
-            print("Dataset refresh failed!")
+            logging.error("Dataset refresh failed!")
             self.force_raise_http_error(response, expected_codes=202)
 
     @check_token
@@ -177,12 +177,12 @@ class PowerBIAPIClient:
         response = requests.post(url, data="notifyOption=NoNotification", headers=self.headers)
 
         if response.status_code == 202:
-            print(
+            logging.info(
                 f"Create push dataset successful using workspace_id: {workspace_id} and "
                 f"retention_policy: {retention_policy}"
             )
         else:
-            print("Create push dataset failed!")
+            logging.error("Create push dataset failed!")
             self.force_raise_http_error(response, expected_codes=202)
 
     @check_token
@@ -191,12 +191,12 @@ class PowerBIAPIClient:
         response = requests.post(url, json=schema, headers=self.get_auth_header())
 
         if response.status_code in [201, 202]:
-            print(
+            logging.info(
                 f"Create dataset successful using workspace_id: {workspace_id}, schema: {schema} "
                 f"and retention_policy: {retention_policy}"
             )
         else:
-            print("Failed to create dataset!")
+            logging.error("Failed to create dataset!")
             self.force_raise_http_error(response, expected_codes=[201, 202])
 
     @check_token
@@ -204,9 +204,9 @@ class PowerBIAPIClient:
         url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}"
         response = requests.delete(url, headers=self.headers)
         if response.status_code == HTTP_OK_CODE:
-            print("Dataset with id: {dataset_id} in workspace with id: {workspace_id} deleted successfully!")
+            logging.info("Dataset with id: {dataset_id} in workspace with id: {workspace_id} deleted successfully!")
         else:
-            print("Failed to delete dataset!")
+            logging.error("Failed to delete dataset!")
             self.force_raise_http_error(response)
 
     @check_token
@@ -219,9 +219,9 @@ class PowerBIAPIClient:
         for i, row_chunk in enumerate(chunked_data, 1):
             response = requests.post(url, json={"rows": row_chunk}, headers=self.get_auth_header())
             if response.status_code == HTTP_OK_CODE:
-                print(f"Chunk [{i}/{tot_chunks}] inserted successfully! Size: {len(row_chunk)} rows")
+                logging.info(f"Chunk [{i}/{tot_chunks}] inserted successfully! Size: {len(row_chunk)} rows")
             else:
-                print("Row insertion failed!")
+                logging.error("Row insertion failed!")
                 self.force_raise_http_error(response)
 
     @check_token
@@ -229,7 +229,7 @@ class PowerBIAPIClient:
         url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}/tables/{table_name}"
         response = requests.put(url, json=schema, headers=self.get_auth_header())
         # TODO(scottmelhop): Use/check/raise depending on status code?
-        print(f"Update table schema returned status code {response.status_code}: {response.text}")
+        logging.info(f"Update table schema returned status code {response.status_code}: {response.text}")
 
     @check_token
     def get_tables(self, workspace_id, dataset_id):
@@ -245,9 +245,9 @@ class PowerBIAPIClient:
         response = requests.delete(url, headers=self.headers)
 
         if response.status_code == HTTP_OK_CODE:
-            print("Table truncation successful!")
+            logging.info("Table truncation successful!")
         else:
-            print("Table truncation failed!")
+            logging.error("Table truncation failed!")
             self.force_raise_http_error(response)
 
     @check_token
@@ -260,7 +260,8 @@ class PowerBIAPIClient:
         if response.status_code == HTTP_OK_CODE:
             return response.json()["value"]
 
-    def find_report_id_by_name(self, reports, name):
+    @staticmethod
+    def find_report_id_by_name(reports, name):
         for item in reports:
             if item["name"] == name:
                 return item["id"]
@@ -281,9 +282,9 @@ class PowerBIAPIClient:
         response = requests.delete(url, headers=self.headers)
 
         if response.status_code == HTTP_OK_CODE:
-            print("Report named '{report_name}' in workspace '{workspace_name}' deleted successfully!")
+            logging.info("Report named '{report_name}' in workspace '{workspace_name}' deleted successfully!")
         else:
-            print(f"Report deletion failed!")
+            logging.error(f"Report deletion failed!")
             self.force_raise_http_error(response)
 
     @check_token
@@ -305,9 +306,9 @@ class PowerBIAPIClient:
             response = requests.post(url, headers=headers, files={"filename": f})
 
         if response.status_code == 202:
-            print(response.json())
+            logging.info(response.json())
             import_id = response.json()["id"]
-            print(f"File uploading with id: {import_id}")
+            logging.info(f"File uploading with id: {import_id}")
         else:
             self.force_raise_http_error(response)
 
@@ -319,15 +320,15 @@ class PowerBIAPIClient:
                 self.force_raise_http_error(response)
 
             if response.json()["importState"] == "Succeeded":
-                print("Import complete")
+                logging.info("Import complete")
                 return
             else:
-                print("Import in progress...")
+                logging.info("Import in progress...")
 
     @staticmethod
     def force_raise_http_error(
         response: requests.Response, expected_codes: Union[List[int], int] = HTTP_OK_CODE
     ) -> NoReturn:
-        print(f"Expected response code(s) {expected_codes}, got {response.status_code}: {response.text}.")
+        logging.error(f"Expected response code(s) {expected_codes}, got {response.status_code}: {response.text}.")
         response.raise_for_status()
         raise requests.HTTPError(response)
