@@ -329,6 +329,6 @@ class PowerBIAPIClient:
     def force_raise_http_error(
         response: requests.Response, expected_codes: Union[List[int], int] = HTTP_OK_CODE
     ) -> NoReturn:
-        logging.exception(f"Expected response code(s) {expected_codes}, got {response.status_code}: {response.text}.")
+        logging.error(f"Expected response code(s) {expected_codes}, got {response.status_code}: {response.text}.")
         response.raise_for_status()
         raise requests.HTTPError(response)
