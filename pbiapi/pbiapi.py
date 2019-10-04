@@ -1,7 +1,6 @@
 import datetime
 import logging
 import os
-import time
 from typing import Callable, Dict, List, NoReturn, Union
 from urllib import parse
 
@@ -114,7 +113,7 @@ class PowerBIAPIClient:
         if response.status_code == HTTP_OK_CODE:
             logging.info(f"Added users to workspace '{workspace_name}'")
         else:
-            logging.error(f"Failed to add users to workspace '{workspace_name}':")
+            logging.error(f"Failed to add user to workspace '{workspace_name}': {user}")
             self.force_raise_http_error(response)
 
     @check_token
