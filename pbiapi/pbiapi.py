@@ -1,8 +1,9 @@
 import datetime
 import os
+import time
 from typing import Callable, Dict, List, NoReturn, Union
 from urllib import parse
-import time
+
 import requests
 
 from .utils import partition
@@ -112,7 +113,7 @@ class PowerBIAPIClient:
         if response.status_code == HTTP_OK_CODE:
             print(f"Added users to workspace '{workspace_name}'")
         else:
-            print(f"Failed to add users to workspace '{workspace_name}':")
+            print(f"Failed to add user to workspace '{workspace_name}': " + str(user))
             self.force_raise_http_error(response)
 
     @check_token
@@ -124,7 +125,7 @@ class PowerBIAPIClient:
 
         response = requests.get(url, headers=self.headers)
         if response.status_code == 200:
-            return response.json()['value']
+            return response.json()["value"]
         else:
             print("Error getting users from workspace")
             self.force_raise_http_error(response)
@@ -313,11 +314,11 @@ class PowerBIAPIClient:
         get_import_url = self.base_url + f"groups/{workspace_id}/imports/{import_id}"
 
         while True:
-            response = requests.get(url=get_import_url,headers=self.headers)
+            response = requests.get(url=get_import_url, headers=self.headers)
             if response.status_code != 200:
                 self.force_raise_http_error(response)
 
-            if response.json()['importState'] == "Succeeded":
+            if response.json()["importState"] == "Succeeded":
                 print("Import complete")
                 return
             else:
@@ -325,8 +326,7 @@ class PowerBIAPIClient:
 
     @staticmethod
     def force_raise_http_error(
-        response: requests.Response,
-        expected_codes: Union[List[int], int] = HTTP_OK_CODE,
+        response: requests.Response, expected_codes: Union[List[int], int] = HTTP_OK_CODE
     ) -> NoReturn:
         print(f"Expected response code(s) {expected_codes}, got {response.status_code}: {response.text}.")
         response.raise_for_status()
