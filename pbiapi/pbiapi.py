@@ -113,7 +113,7 @@ class PowerBIAPIClient:
         if response.status_code == HTTP_OK_CODE:
             print(f"Added users to workspace '{workspace_name}'")
         else:
-            print(f"Failed to add user to workspace '{workspace_name}': " + str(user))
+            print(f"Failed to add user to workspace '{workspace_name}': {user}")
             self.force_raise_http_error(response)
 
     @check_token
