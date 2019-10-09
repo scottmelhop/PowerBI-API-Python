@@ -6,8 +6,8 @@ from urllib import parse
 
 import requests
 
-from utils import partition
-ƒ
+from .utils import partition
+
 HTTP_OK_CODE = 200
 
 
