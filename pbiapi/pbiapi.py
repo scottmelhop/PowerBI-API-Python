@@ -298,7 +298,8 @@ class PowerBIAPIClient:
         url = (
             self.base_url
             + f"groups/{workspace_id}/imports?datasetDisplayName={display_name}&nameConflict="
-            + f"{name_conflict}&skipReport={skip_report}"
+            + f"{name_conflict}"
+            + ("&skipReport=true" if skip_report else "")
         )
         headers = {"Content-Type": "multipart/form-data", **self.get_auth_header()}
 
