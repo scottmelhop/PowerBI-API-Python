@@ -6,7 +6,7 @@ from urllib import parse
 
 import requests
 
-from .utils import partition
+from pbiapi.utils import partition
 
 HTTP_OK_CODE = 200
 
@@ -200,7 +200,12 @@ class PowerBIAPIClient:
             self.force_raise_http_error(response, expected_codes=[201, 202])
 
     @check_token
-    def delete_dataset(self, workspace_id, dataset_id):
+    def delete_dataset(self, workspace_name: str, dataset_name: str) -> None:
+        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
+
+        datasets = self.get_datasets_in_workspace(workspace_name)
+        dataset_id = self.find_entity_id_by_name(datasets, dataset_name, "dataset", raise_if_missing=True)
+
         url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}"
         response = requests.delete(url, headers=self.headers)
         if response.status_code == HTTP_OK_CODE:
