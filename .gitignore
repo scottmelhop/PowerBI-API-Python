@@ -2,6 +2,8 @@
 __pycache__/
 build
 pbiapi.egg-info/
-ignore
 
 .DS_Store
+venv
+.idea
+dist
