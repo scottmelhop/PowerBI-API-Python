@@ -13,10 +13,7 @@ HTTP_OK_CODE = 200
 
 def check_token(fn: Callable) -> Callable:
     def wrapper(pbi_client, *args, **kwargs):
-        if (
-            pbi_client.token is None
-            or pbi_client.token_expiration < datetime.datetime.utcnow()
-        ):
+        if pbi_client.token is None or pbi_client.token_expiration < datetime.datetime.utcnow():
             pbi_client.update_token()
         return fn(pbi_client, *args, **kwargs)
 
@@ -29,9 +26,7 @@ class PowerBIAPIClient:
         self.client_id = client_id
         self.client_secret = client_secret
         self.base_url = "https://api.powerbi.com/v1.0/myorg/"
-        self.url = (
-            f"https://login.microsoftonline.com/{self.tenant_id}/oauth2/v2.0/token"
-        )
+        self.url = f"https://login.microsoftonline.com/{self.tenant_id}/oauth2/v2.0/token"
         self.token = None
         self.token_expiration = None
         self._workspaces = None
@@ -52,9 +47,7 @@ class PowerBIAPIClient:
 
         if response.status_code == HTTP_OK_CODE:
             self.token = response.json()["access_token"]
-            self.token_expiration = datetime.datetime.utcnow() + datetime.timedelta(
-                hours=1
-            )
+            self.token_expiration = datetime.datetime.utcnow() + datetime.timedelta(hours=1)
             self.headers = {**headers, **self.get_auth_header()}
         else:
             self.force_raise_http_error(response)
@@ -76,9 +69,7 @@ class PowerBIAPIClient:
             self.force_raise_http_error(response)
 
     @staticmethod
-    def find_entity_id_by_name(
-        entity_list: List, name: str, entity_type: str, raise_if_missing: bool = False
-    ) -> str:
+    def find_entity_id_by_name(entity_list: List, name: str, entity_type: str, raise_if_missing: bool = False) -> str:
         for item in entity_list:
             if item["name"] == name:
                 return item["id"]
@@ -92,9 +83,7 @@ class PowerBIAPIClient:
         response = requests.get(url, headers=self.headers)
 
         if response.status_code != HTTP_OK_CODE:
-            logging.error(
-                f"Failed when checking if the workspace, '{name}' already exists!"
-            )
+            logging.error(f"Failed when checking if the workspace, '{name}' already exists!")
             self.force_raise_http_error(response)
 
         if response.json()["@odata.count"] > 0:
@@ -115,9 +104,7 @@ class PowerBIAPIClient:
 
     @check_token
     def add_user_to_workspace(self, workspace_name: str, user: Dict) -> None:
-        workspace_id = self.find_entity_id_by_name(
-            self.workspaces, workspace_name, "workspace", raise_if_missing=True
-        )
+        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
 
         # Workspace exists, lets add user:
         url = self.base_url + f"groups/{workspace_id}/users"
@@ -131,9 +118,7 @@ class PowerBIAPIClient:
 
     @check_token
     def get_users_from_workspace(self, name: str) -> List:
-        workspace_id = self.find_entity_id_by_name(
-            self.workspaces, name, "workspace", raise_if_missing=True
-        )
+        workspace_id = self.find_entity_id_by_name(self.workspaces, name, "workspace", raise_if_missing=True)
 
         url = self.base_url + f"groups/{workspace_id}/users"
 
@@ -146,9 +131,7 @@ class PowerBIAPIClient:
 
     @check_token
     def delete_workspace(self, workspace_name: str) -> None:
-        workspace_id = self.find_entity_id_by_name(
-            self.workspaces, workspace_name, "workspace"
-        )
+        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace")
 
         if workspace_id is None:
             # If workspace is already deleted / doesn't exist, we simply return:
@@ -165,9 +148,7 @@ class PowerBIAPIClient:
 
     @check_token
     def get_datasets_in_workspace(self, workspace_name: str) -> List:
-        workspace_id = self.find_entity_id_by_name(
-            self.workspaces, workspace_name, "workspace", raise_if_missing=True
-        )
+        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
 
         datasets_url = self.base_url + f"groups/{workspace_id}/datasets"
         response = requests.get(datasets_url, headers=self.headers)
@@ -177,18 +158,12 @@ class PowerBIAPIClient:
 
     @check_token
     def refresh_dataset_by_id(self, workspace_name: str, dataset_id: str) -> None:
-        workspace_id = self.find_entity_id_by_name(
-            self.workspaces, workspace_name, "workspace", raise_if_missing=True
-        )
+        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
         url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}/refreshes"
-        response = requests.post(
-            url, data="notifyOption=NoNotification", headers=self.headers
-        )
+        response = requests.post(url, data="notifyOption=NoNotification", headers=self.headers)
 
         if response.status_code == 202:
-            logging.info(
-                f"Dataset with id {dataset_id} (and workspace id {workspace_id}) was updated!"
-            )
+            logging.info(f"Dataset with id {dataset_id} (and workspace id {workspace_id}) was updated!")
         else:
             logging.error("Dataset refresh failed!")
             self.force_raise_http_error(response, expected_codes=202)
@@ -196,23 +171,14 @@ class PowerBIAPIClient:
     @check_token
     def refresh_dataset_by_name(self, workspace_name: str, dataset_name: str) -> None:
         datasets = self.get_datasets_in_workspace(workspace_name)
-        dataset_id = self.find_entity_id_by_name(
-            datasets, dataset_name, "dataset", True
-        )
+        dataset_id = self.find_entity_id_by_name(datasets, dataset_name, "dataset", True)
         self.refresh_dataset_by_id(workspace_name, dataset_id)
 
     @check_token
     def create_push_dataset(self, workspace_name: str, retention_policy: str) -> None:
-        workspace_id = self.find_entity_id_by_name(
-            self.workspaces, workspace_name, "workspace", raise_if_missing=True
-        )
-        url = (
-            self.base_url
-            + f"groups/{workspace_id}/datasets?defaultRetentionPolicy={retention_policy}"
-        )
-        response = requests.post(
-            url, data="notifyOption=NoNotification", headers=self.headers
-        )
+        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
+        url = self.base_url + f"groups/{workspace_id}/datasets?defaultRetentionPolicy={retention_policy}"
+        response = requests.post(url, data="notifyOption=NoNotification", headers=self.headers)
 
         if response.status_code == 202:
             logging.info(
@@ -224,16 +190,9 @@ class PowerBIAPIClient:
             self.force_raise_http_error(response, expected_codes=202)
 
     @check_token
-    def create_dataset(
-        self, workspace_name: str, schema: Dict, retention_policy: str
-    ) -> None:
-        workspace_id = self.find_entity_id_by_name(
-            self.workspaces, workspace_name, "workspace", raise_if_missing=True
-        )
-        url = (
-            self.base_url
-            + f"groups/{workspace_id}/datasets?defaultRetentionPolicy={retention_policy}"
-        )
+    def create_dataset(self, workspace_name: str, schema: Dict, retention_policy: str) -> None:
+        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
+        url = self.base_url + f"groups/{workspace_id}/datasets?defaultRetentionPolicy={retention_policy}"
         response = requests.post(url, json=schema, headers=self.get_auth_header())
 
         if response.status_code in [201, 202]:
@@ -247,79 +206,46 @@ class PowerBIAPIClient:
 
     @check_token
     def delete_dataset(self, workspace_name: str, dataset_name: str) -> None:
-        workspace_id = self.find_entity_id_by_name(
-            self.workspaces, workspace_name, "workspace", raise_if_missing=True
-        )
+        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
 
         datasets = self.get_datasets_in_workspace(workspace_name)
-        dataset_id = self.find_entity_id_by_name(
-            datasets, dataset_name, "dataset", raise_if_missing=True
-        )
+        dataset_id = self.find_entity_id_by_name(datasets, dataset_name, "dataset", raise_if_missing=True)
 
         url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}"
         response = requests.delete(url, headers=self.headers)
         if response.status_code == HTTP_OK_CODE:
-            logging.info(
-                "Dataset with id: {dataset_id} in workspace with id: {workspace_id} deleted successfully!"
-            )
+            logging.info("Dataset with id: {dataset_id} in workspace with id: {workspace_id} deleted successfully!")
         else:
             logging.error("Failed to delete dataset!")
             self.force_raise_http_error(response)
 
     @check_token
-    def post_rows(
-        self,
-        workspace_name: str,
-        dataset_id: str,
-        table_name: str,
-        data,
-        chunk_size: int = 10000,
-    ) -> None:
-        workspace_id = self.find_entity_id_by_name(
-            self.workspaces, workspace_name, "workspace", raise_if_missing=True
-        )
-        url = (
-            self.base_url
-            + f"groups/{workspace_id}/datasets/{dataset_id}/tables/{table_name}/rows"
-        )
+    def post_rows(self, workspace_name: str, dataset_id: str, table_name: str, data, chunk_size: int = 10000,) -> None:
+        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
+        url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}/tables/{table_name}/rows"
 
         chunked_data = partition(data, n=chunk_size)
         tot_chunks = len(chunked_data)
 
         for i, row_chunk in enumerate(chunked_data, 1):
-            response = requests.post(
-                url, json={"rows": row_chunk}, headers=self.get_auth_header()
-            )
+            response = requests.post(url, json={"rows": row_chunk}, headers=self.get_auth_header())
             if response.status_code == HTTP_OK_CODE:
-                logging.info(
-                    f"Chunk [{i}/{tot_chunks}] inserted successfully! Size: {len(row_chunk)} rows"
-                )
+                logging.info(f"Chunk [{i}/{tot_chunks}] inserted successfully! Size: {len(row_chunk)} rows")
             else:
                 logging.error("Row insertion failed!")
                 self.force_raise_http_error(response)
 
     @check_token
-    def update_table_schema(
-        self, workspace_name: str, dataset_id: str, table_name: str, schema: Dict
-    ) -> None:
-        workspace_id = self.find_entity_id_by_name(
-            self.workspaces, workspace_name, "workspace", raise_if_missing=True
-        )
-        url = (
-            self.base_url
-            + f"groups/{workspace_id}/datasets/{dataset_id}/tables/{table_name}"
-        )
+    def update_table_schema(self, workspace_name: str, dataset_id: str, table_name: str, schema: Dict) -> None:
+        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
+        url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}/tables/{table_name}"
         response = requests.put(url, json=schema, headers=self.get_auth_header())
         # TODO(scottmelhop): Use/check/raise depending on status code?
-        logging.info(
-            f"Update table schema returned status code {response.status_code}: {response.text}"
-        )
+        logging.info(f"Update table schema returned status code {response.status_code}: {response.text}")
 
     @check_token
     def get_tables(self, workspace_name: str, dataset_id: str) -> List:
-        workspace_id = self.find_entity_id_by_name(
-            self.workspaces, workspace_name, "workspace", raise_if_missing=True
-        )
+        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
         url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}/tables"
         response = requests.get(url, headers=self.headers)
 
@@ -327,16 +253,9 @@ class PowerBIAPIClient:
             return response.json()
 
     @check_token
-    def truncate_table(
-        self, workspace_name: str, dataset_id: str, table_name: str
-    ) -> None:
-        workspace_id = self.find_entity_id_by_name(
-            self.workspaces, workspace_name, "workspace", raise_if_missing=True
-        )
-        url = (
-            self.base_url
-            + f"groups/{workspace_id}/datasets/{dataset_id}/tables/{table_name}/rows"
-        )
+    def truncate_table(self, workspace_name: str, dataset_id: str, table_name: str) -> None:
+        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
+        url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}/tables/{table_name}/rows"
         response = requests.delete(url, headers=self.headers)
 
         if response.status_code == HTTP_OK_CODE:
@@ -347,9 +266,7 @@ class PowerBIAPIClient:
 
     @check_token
     def get_reports_in_workspace(self, workspace_name: str) -> List:
-        workspace_id = self.find_entity_id_by_name(
-            self.workspaces, workspace_name, "workspace", raise_if_missing=True
-        )
+        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
 
         url = self.base_url + f"groups/{workspace_id}/reports"
         response = requests.get(url, headers=self.headers)
@@ -358,22 +275,14 @@ class PowerBIAPIClient:
             return response.json()["value"]
 
     @check_token
-    def rebind_report_in_workspace(
-        self, workspace_name: str, dataset_name: str, report_name: str
-    ) -> None:
-        workspace_id = self.find_entity_id_by_name(
-            self.workspaces, workspace_name, "workspace", raise_if_missing=True
-        )
+    def rebind_report_in_workspace(self, workspace_name: str, dataset_name: str, report_name: str) -> None:
+        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
 
         reports = self.get_reports_in_workspace(workspace_name)
-        report_id = self.find_entity_id_by_name(
-            reports, report_name, "report", raise_if_missing=True
-        )
+        report_id = self.find_entity_id_by_name(reports, report_name, "report", raise_if_missing=True)
 
         datasets = self.get_datasets_in_workspace(workspace_name)
-        dataset_id = self.find_entity_id_by_name(
-            datasets, dataset_name, "dataset", raise_if_missing=True
-        )
+        dataset_id = self.find_entity_id_by_name(datasets, dataset_name, "dataset", raise_if_missing=True)
 
         url = self.base_url + f"groups/{workspace_id}/reports/{report_id}/Rebind"
         headers = {"Content-Type": "application/json", **self.get_auth_header()}
@@ -381,33 +290,23 @@ class PowerBIAPIClient:
 
         response = requests.post(url, json=payload, headers=headers)
         if response.status_code == HTTP_OK_CODE:
-            logging.info(
-                f"Report named '{report_name}' rebound to dataset with name '{dataset_name}'"
-            )
+            logging.info(f"Report named '{report_name}' rebound to dataset with name '{dataset_name}'")
         else:
-            logging.error(
-                f"Failed to rebind report with name '{report_name}' to dataset with name '{dataset_name}'"
-            )
+            logging.error(f"Failed to rebind report with name '{report_name}' to dataset with name '{dataset_name}'")
             self.force_raise_http_error(response)
 
     @check_token
     def delete_report(self, workspace_name: str, report_name: str) -> None:
-        workspace_id = self.find_entity_id_by_name(
-            self.workspaces, workspace_name, "workspace", raise_if_missing=True
-        )
+        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
 
         reports = self.get_reports_in_workspace(workspace_name)
-        report_id = self.find_entity_id_by_name(
-            reports, report_name, "report", raise_if_missing=True
-        )
+        report_id = self.find_entity_id_by_name(reports, report_name, "report", raise_if_missing=True)
 
         url = self.base_url + f"groups/{workspace_id}/reports/{report_id}"
         response = requests.delete(url, headers=self.headers)
 
         if response.status_code == HTTP_OK_CODE:
-            logging.info(
-                f"Report named '{report_name}' in workspace '{workspace_name}' deleted successfully!"
-            )
+            logging.info(f"Report named '{report_name}' in workspace '{workspace_name}' deleted successfully!")
         else:
             logging.error("Report deletion failed!")
             self.force_raise_http_error(response)
@@ -416,9 +315,7 @@ class PowerBIAPIClient:
     def import_file_into_workspace(
         self, workspace_name: str, skip_report: bool, file_path: str, display_name: str
     ) -> None:
-        workspace_id = self.find_entity_id_by_name(
-            self.workspaces, workspace_name, "workspace", raise_if_missing=True
-        )
+        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
 
         if not os.path.isfile(file_path):
             raise FileNotFoundError(2, f"No such file or directory: '{file_path}'")
@@ -456,23 +353,14 @@ class PowerBIAPIClient:
                 logging.info("Import in progress...")
 
     @check_token
-    def update_parameters_in_dataset(
-        self, workspace_name: str, dataset_name: str, parameters: list
-    ):
-        workspace_id = self.find_entity_id_by_name(
-            self.workspaces, workspace_name, "workspace", raise_if_missing=True
-        )
+    def update_parameters_in_dataset(self, workspace_name: str, dataset_name: str, parameters: list):
+        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
 
         datasets = self.get_datasets_in_workspace(workspace_name)
-        dataset_id = self.find_entity_id_by_name(
-            datasets, dataset_name, "dataset", raise_if_missing=True
-        )
+        dataset_id = self.find_entity_id_by_name(datasets, dataset_name, "dataset", raise_if_missing=True)
 
         update_details = {"updateDetails": parameters}
-        url = (
-            self.base_url
-            + f"groups/{workspace_id}/datasets/{dataset_id}/UpdateParameters"
-        )
+        url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}/UpdateParameters"
         headers = {"Content-Type": "application/json", **self.get_auth_header()}
         response = requests.post(url, json=update_details, headers=headers)
 
@@ -489,14 +377,10 @@ class PowerBIAPIClient:
 
     @check_token
     def get_parameters_in_dataset(self, workspace_name: str, dataset_name: str) -> List:
-        workspace_id = self.find_entity_id_by_name(
-            self.workspaces, workspace_name, "workspace", raise_if_missing=True
-        )
+        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
 
         datasets = self.get_datasets_in_workspace(workspace_name)
-        dataset_id = self.find_entity_id_by_name(
-            datasets, dataset_name, "dataset", raise_if_missing=True
-        )
+        dataset_id = self.find_entity_id_by_name(datasets, dataset_name, "dataset", raise_if_missing=True)
 
         url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}/parameters"
 
@@ -510,14 +394,10 @@ class PowerBIAPIClient:
 
     @check_token
     def take_over_dataset(self, workspace_name: str, dataset_name: str) -> None:
-        workspace_id = self.find_entity_id_by_name(
-            self.workspaces, workspace_name, "workspace", raise_if_missing=True
-        )
+        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
 
         datasets = self.get_datasets_in_workspace(workspace_name)
-        dataset_id = self.find_entity_id_by_name(
-            datasets, dataset_name, "dataset", raise_if_missing=True
-        )
+        dataset_id = self.find_entity_id_by_name(datasets, dataset_name, "dataset", raise_if_missing=True)
 
         url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}/TakeOver"
 
@@ -531,11 +411,8 @@ class PowerBIAPIClient:
 
     @staticmethod
     def force_raise_http_error(
-        response: requests.Response,
-        expected_codes: Union[List[int], int] = HTTP_OK_CODE,
+        response: requests.Response, expected_codes: Union[List[int], int] = HTTP_OK_CODE,
     ) -> NoReturn:
-        logging.error(
-            f"Expected response code(s) {expected_codes}, got {response.status_code}: {response.text}."
-        )
+        logging.error(f"Expected response code(s) {expected_codes}, got {response.status_code}: {response.text}.")
         response.raise_for_status()
         raise requests.HTTPError(response)
