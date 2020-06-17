@@ -220,7 +220,7 @@ class PowerBIAPIClient:
             self.force_raise_http_error(response)
 
     @check_token
-    def post_rows(self, workspace_name: str, dataset_id: str, table_name: str, data, chunk_size: int = 10000,) -> None:
+    def post_rows(self, workspace_name: str, dataset_id: str, table_name: str, data, chunk_size: int = 10000) -> None:
         workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
         url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}/tables/{table_name}/rows"
 
