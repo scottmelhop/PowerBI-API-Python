@@ -31,9 +31,9 @@ jobs:
       run: |
         poetry run black --check .
         poetry run isort --check-only -rc .
-    - name: Run tests
-      run: |
-        coverage run --source cognite.experimental -m pytest -v tests
+    # - name: Run tests
+    #   run: |
+    #     coverage run --source cognite.experimental -m pytest -v tests
 #        coverage xml
 #    - uses: codecov/codecov-action@v1
 #      with:
