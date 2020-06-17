@@ -7,3 +7,5 @@ pbiapi.egg-info/
 venv
 .idea
 dist
+
+.venv
