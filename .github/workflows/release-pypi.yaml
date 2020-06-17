@@ -1,0 +1,43 @@
+name: "Release pypi"
+
+on:
+  push:
+    branches:
+      - "master"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      name: Checkout code
+
+    - name: Set up Python
+      uses: actions/setup-python@v1
+      with:
+        python-version: 3.8
+
+    - name: Install dependencies
+      run: |
+        python3 -m pip install --upgrade pip poetry
+        poetry config virtualenvs.create false
+        poetry install
+    - name: Check codestyle
+      run: |
+        poetry run black --check .
+        poetry run isort --check-only -rc .
+    # - name: Run tests
+    #   run: |
+    #     coverage run --source inso_toolbox -m pytest -v tests
+#        coverage xml
+
+#    - uses: codecov/codecov-action@v1
+#      with:
+#        token: ${{ secrets.CODECOV_TOKEN }}
+#        file: ./coverage.xml
+
+    - name: Build package
+      run: poetry build
+
+    - name: Release to PyPI
+      run: poetry publish -u __token__ -p ${{ secrets.PYPI_API_TOKEN }} || echo 'Version exists'
