@@ -1,8 +1,14 @@
 [tool.poetry]
 name = "pbiapi"
-version = "0.1.0"
-description = ""
+version = "0.1.5"
+description = "A Python library for working with the Power BI API"
 authors = ["Scott Melhop <scott.melhop@cognite.com>"]
+repository = "https://github.com/scottmelhop/PowerBI-API-Python"
+classifiers=[
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: OS Independent",
+]
 
 [tool.black]
 line-length = 120
@@ -18,6 +24,7 @@ known_third_party = ["arrow", "autoimpute", "cognite", "cvxpy", "fancyimpute", "
 
 [tool.poetry.dependencies]
 python = "^3.7"
+requests = "^2.23.0"
 
 [tool.poetry.dev-dependencies]
 black = "^19.10b0"
