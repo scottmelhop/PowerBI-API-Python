@@ -206,10 +206,7 @@ class PowerBIAPIClient:
 
     @check_token
     def delete_dataset(self, workspace_name: str, dataset_name: str) -> None:
-        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
-
-        datasets = self.get_datasets_in_workspace(workspace_name)
-        dataset_id = self.find_entity_id_by_name(datasets, dataset_name, "dataset", raise_if_missing=True)
+        workspace_id, dataset_id = self.get_workspace_and_dataset_id(workspace_name, dataset_name)
 
         url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}"
         response = requests.delete(url, headers=self.headers)
@@ -276,13 +273,10 @@ class PowerBIAPIClient:
 
     @check_token
     def rebind_report_in_workspace(self, workspace_name: str, dataset_name: str, report_name: str) -> None:
-        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
+        workspace_id, dataset_id = self.get_workspace_and_dataset_id(workspace_name, dataset_name)
 
         reports = self.get_reports_in_workspace(workspace_name)
         report_id = self.find_entity_id_by_name(reports, report_name, "report", raise_if_missing=True)
-
-        datasets = self.get_datasets_in_workspace(workspace_name)
-        dataset_id = self.find_entity_id_by_name(datasets, dataset_name, "dataset", raise_if_missing=True)
 
         url = self.base_url + f"groups/{workspace_id}/reports/{report_id}/Rebind"
         headers = {"Content-Type": "application/json", **self.get_auth_header()}
@@ -354,10 +348,7 @@ class PowerBIAPIClient:
 
     @check_token
     def update_parameters_in_dataset(self, workspace_name: str, dataset_name: str, parameters: list):
-        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
-
-        datasets = self.get_datasets_in_workspace(workspace_name)
-        dataset_id = self.find_entity_id_by_name(datasets, dataset_name, "dataset", raise_if_missing=True)
+        workspace_id, dataset_id = self.get_workspace_and_dataset_id(workspace_name, dataset_name)
 
         update_details = {"updateDetails": parameters}
         url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}/UpdateParameters"
@@ -377,10 +368,7 @@ class PowerBIAPIClient:
 
     @check_token
     def get_parameters_in_dataset(self, workspace_name: str, dataset_name: str) -> List:
-        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
-
-        datasets = self.get_datasets_in_workspace(workspace_name)
-        dataset_id = self.find_entity_id_by_name(datasets, dataset_name, "dataset", raise_if_missing=True)
+        workspace_id, dataset_id = self.get_workspace_and_dataset_id(workspace_name, dataset_name)
 
         url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}/parameters"
 
@@ -394,10 +382,7 @@ class PowerBIAPIClient:
 
     @check_token
     def take_over_dataset(self, workspace_name: str, dataset_name: str) -> None:
-        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
-
-        datasets = self.get_datasets_in_workspace(workspace_name)
-        dataset_id = self.find_entity_id_by_name(datasets, dataset_name, "dataset", raise_if_missing=True)
+        workspace_id, dataset_id = self.get_workspace_and_dataset_id(workspace_name, dataset_name)
 
         url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}/TakeOver"
 
@@ -416,3 +401,11 @@ class PowerBIAPIClient:
         logging.error(f"Expected response code(s) {expected_codes}, got {response.status_code}: {response.text}.")
         response.raise_for_status()
         raise requests.HTTPError(response)
+
+    def get_workspace_and_dataset_id(self, workspace_name: str, dataset_name: str) -> Union:
+        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
+
+        datasets = self.get_datasets_in_workspace(workspace_name)
+        dataset_id = self.find_entity_id_by_name(datasets, dataset_name, "dataset", raise_if_missing=True)
+
+        return workspace_id, dataset_id
