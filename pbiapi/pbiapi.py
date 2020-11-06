@@ -5,6 +5,7 @@ from typing import Callable, Dict, List, NoReturn, Union
 from urllib import parse
 
 import requests
+import json
 
 from pbiapi.utils import partition
 
@@ -409,3 +410,19 @@ class PowerBIAPIClient:
         dataset_id = self.find_entity_id_by_name(datasets, dataset_name, "dataset", raise_if_missing=True)
 
         return workspace_id, dataset_id
+
+    @check_token
+    def get_embed_token(self, workspace_id: str, report_id: str, access_level: str) -> None:
+        payload = {
+            'accessLevel' : access_level
+        }
+
+        url = self.base_url + f"groups/{workspace_id}/reports/{report_id}/GenerateToken"
+        response = requests.post(url, headers=self.headers, data=json.dumps(payload))
+
+        if response.status_code == HTTP_OK_CODE:
+            logging.info(f"Report named '{report_id}' in workspace '{workspace_id}' embed'{response.json()['token']}")
+            return response.json()['token']
+        else:
+            logging.error("Report deletion failed!")
+            self.force_raise_http_error(response)
