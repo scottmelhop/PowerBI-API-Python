@@ -424,5 +424,5 @@ class PowerBIAPIClient:
             logging.info(f"Report named '{report_id}' in workspace '{workspace_id}' embed'{response.json()['token']}")
             return response.json()['token']
         else:
-            logging.error("Report deletion failed!")
+            logging.error("Report failed to get embed token")
             self.force_raise_http_error(response)
