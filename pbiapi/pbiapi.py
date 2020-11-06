@@ -1,11 +1,11 @@
 import datetime
+import json
 import logging
 import os
 from typing import Callable, Dict, List, NoReturn, Union
 from urllib import parse
 
 import requests
-import json
 
 from pbiapi.utils import partition
 
