@@ -394,6 +394,20 @@ class PowerBIAPIClient:
             logging.error(f"Takeover of dataset {dataset_name} failed!")
             self.force_raise_http_error(response)
 
+    @check_token
+    def get_dataset_refresh_history(self, workspace_name: str, dataset_name: str, top=10) -> List:
+        workspace_id, dataset_id = self.get_workspace_and_dataset_id(workspace_name, dataset_name)
+
+        url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}/refreshes?$top={top}"
+
+        response = requests.post(url, headers=self.headers)
+
+        if response.status_code == HTTP_OK_CODE:
+            return response.json()["value"]
+        else:
+            logging.error(f"Failed getting refresh history for {dataset_name}!")
+            self.force_raise_http_error(response)
+
     @staticmethod
     def force_raise_http_error(
         response: requests.Response, expected_codes: Union[List[int], int] = HTTP_OK_CODE

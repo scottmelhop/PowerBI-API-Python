@@ -8,7 +8,7 @@ with open("requirements.txt") as fh:
 
 setuptools.setup(
     name="pbiapi",
-    version="0.1.5",
+    version="0.2.0",
     author="Scott Melhop",
     author_email="scott.melhop@gmail.com",
     description="A Python library for working with the Power BI API",
