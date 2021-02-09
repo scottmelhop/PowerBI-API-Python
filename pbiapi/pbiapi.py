@@ -401,7 +401,7 @@ class PowerBIAPIClient:
 
         url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}/refreshes?$top={top}"
 
-        response = requests.post(url, headers=self.headers)
+        response = requests.get(url, headers=self.headers)
 
         if response.status_code in [HTTP_OK_CODE, HTTP_ACCEPTED_CODE]:
             return response.json()["value"]
