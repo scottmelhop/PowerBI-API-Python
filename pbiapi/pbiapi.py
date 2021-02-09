@@ -9,6 +9,7 @@ import requests
 from pbiapi.utils import partition
 
 HTTP_OK_CODE = 200
+HTTP_ACCEPTED_CODE = 202
 
 
 def check_token(fn: Callable) -> Callable:
@@ -402,7 +403,7 @@ class PowerBIAPIClient:
 
         response = requests.post(url, headers=self.headers)
 
-        if response.status_code == HTTP_OK_CODE:
+        if response.status_code in [HTTP_OK_CODE, HTTP_ACCEPTED_CODE]:
             return response.json()["value"]
         else:
             logging.error(f"Failed getting refresh history for {dataset_name}!")
