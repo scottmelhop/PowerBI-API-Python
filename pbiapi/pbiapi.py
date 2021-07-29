@@ -424,3 +424,52 @@ class PowerBIAPIClient:
         dataset_id = self.find_entity_id_by_name(datasets, dataset_name, "dataset", raise_if_missing=True)
 
         return workspace_id, dataset_id
+
+    @check_token
+    def get_pipelines(self) -> List:
+        url = self.base_url + "pipelines"
+        print(url)
+        response = requests.get(url, headers=self.headers)
+        if response.status_code == HTTP_OK_CODE:
+            self._workspaces = response.json()["value"]
+            return self._workspaces
+        else:
+            logging.error("Failed to fetch pipelines!")
+            self.force_raise_http_error(response)
+
+
+    @check_token
+    def get_pipeline(self, pipeline_id: str ) -> List:
+        url = self.base_url + f"pipelines/{pipeline_id}"
+        response = requests.get(url, headers=self.headers)
+        print(response.json())
+        if response.status_code == HTTP_OK_CODE:
+            self._workspaces = response.json()
+            return self._workspaces
+        else:
+            logging.error("Failed to fetch pipeline!")
+            self.force_raise_http_error(response)
+
+    @check_token
+    def get_pipeline_by_name(self, pipeline_name) -> List:
+        pipelines_list=self.get_pipelines()
+        pipeline_id = self.find_entity_id_by_name(pipelines_list, pipeline_name, "pipelines", raise_if_missing=True,attribute_name_alias='displayName' )
+        print('pipeline id: %s' %  pipeline_id)
+        return (self.get_pipeline(pipeline_id))
+
+    @check_token
+    def get_pipeline_operations(self, pipeline_id: str) -> List:
+        url = self.base_url + f"pipelines/{pipeline_id}/operations"
+        response = requests.get(url, headers=self.headers)
+        if response.status_code == HTTP_OK_CODE:
+            self._workspaces = response.json()["value"]
+            return self._workspaces
+        else:
+            logging.error("Failed to fetch pipeline operations!")
+            self.force_raise_http_error(response)
+    @check_token
+    def get_pipeline_operations_by_name(self, pipeline_name: str) -> List:
+        pipelines_list=self.get_pipelines()
+        pipeline_id = self.find_entity_id_by_name(pipelines_list, pipeline_name, "pipelines", raise_if_missing=True,attribute_name_alias='displayName' )
+        print('pipeline id: %s' %  pipeline_id)
+        return (self.get_pipeline_operations(pipeline_id))
