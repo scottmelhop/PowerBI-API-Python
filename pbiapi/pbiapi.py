@@ -70,9 +70,9 @@ class PowerBIAPIClient:
             self.force_raise_http_error(response)
 
     @staticmethod
-    def find_entity_id_by_name(entity_list: List, name: str, entity_type: str, raise_if_missing: bool = False) -> str:
+    def find_entity_id_by_name(entity_list: List, name: str, entity_type: str , raise_if_missing: bool = False ,attribute_name_alias: str = "name") -> str:
         for item in entity_list:
-            if item["name"] == name:
+            if item[attribute_name_alias] == name:
                 return item["id"]
         if raise_if_missing:
             raise RuntimeError(f"No {entity_type} was found with the name: '{name}'")
