@@ -499,8 +499,8 @@ class PowerBIAPIClient:
             self.force_raise_http_error(response, expected_codes=200)
     
     @check_token
-    def get_dataset_datasources(self, dataset_id) -> List:
-        url = self.base_url + f"datasets/{dataset_id}/datasources"
+    def get_dataset_datasources(self, workspace_id,dataset_id) -> List:
+        url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}/datasources"
         response = requests.get(url, headers=self.headers)
 
         if response.status_code == HTTP_OK_CODE:
