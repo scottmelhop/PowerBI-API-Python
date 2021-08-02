@@ -473,3 +473,21 @@ class PowerBIAPIClient:
         pipeline_id = self.find_entity_id_by_name(pipelines_list, pipeline_name, "pipelines", raise_if_missing=True,attribute_name_alias='displayName' )
         print('pipeline id: %s' %  pipeline_id)
         return (self.get_pipeline_operations(pipeline_id))
+
+
+    @check_token
+    def clone_report_by_id(self, workspace_name: str, report_id: str, new_report_name: str) -> None:
+        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
+        url = self.base_url + f"groups/{workspace_id}/reports/{report_id}/Clone"
+        data="Name=" + new_report_name
+        response = requests.post(url, data=data, headers=self.headers)
+
+        if response.status_code == 200:
+            logging.info(f"report  {report_id} from workspace {workspace_name}) was cloned ")
+            return (response.json())
+        else:
+            logging.error("Dataset refresh failed!")
+            self.force_raise_http_error(response, expected_codes=200)
+    
+
+
