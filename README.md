@@ -27,3 +27,13 @@ You can then get all the workspaces the Service Principal is admin of by running
 ```python
 pbi_client.get_workspaces()
 ```
+
+## in order to install the whl package:  
+cd dist. 
+pip install pbiapi-0.2.3-py3-none-any.whl. 
+
+within python driver:  
+workspace_name='the_name_of_the_workspace'. 
+report_id='97e4b697-8223-4cfa-b29c.......'  
+new_report_name='new_report_name'. 
+print(pbi_client.clone_report_by_id(workspace_name, report_id, new_report_name=new_report_name) )
