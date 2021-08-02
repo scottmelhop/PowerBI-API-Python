@@ -19,12 +19,13 @@ def main():
     )
     parser = argparse.ArgumentParser()
     parser.add_argument("--workspace_name",dest="workspace_name", help="the workspace_name", required=True)
-    parser.add_argument("--report_id",dest="report_id", help="the report_id to be cloned", required=True)
+    parser.add_argument("--report_name",dest="report_name", help="the report_id to be cloned", required=True)
     parser.add_argument("--new_report_name",dest="new_report_name", help="The new report name", required=True)
+    parser.add_argument("--new_workspace_name",dest="new_workspace_name", help="The new workspace name", required=True)
     args =parser.parse_args()
     print(args)
     print(pbi_client.get_reports_in_workspace('parralel_run_production'))   
-    print(pbi_client.clone_report_by_id(args.workspace_name, args.report_id, args.new_report_name) )
+    print(pbi_client.clone_report_by_id(args.workspace_name, args.report_name, args.new_report_name, args.new_workspace_name) )
  
 if __name__ == "__main__":
     main()

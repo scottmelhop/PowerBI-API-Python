@@ -476,10 +476,19 @@ class PowerBIAPIClient:
 
 
     @check_token
-    def clone_report_by_id(self, workspace_name: str, report_id: str, new_report_name: str) -> None:
+    def clone_report_by_name(self, workspace_name: str, report_name: str, new_report_name: str , target_work_space_name: str=None, target_model_id: str=None) -> None:
         workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
+        workspace_reports=self.get_reports_in_workspace(workspace_name)
+        report_id=self.find_entity_id_by_name(workspace_reports, report_name, "reports", raise_if_missing=True)        
         url = self.base_url + f"groups/{workspace_id}/reports/{report_id}/Clone"
-        data="Name=" + new_report_name
+        data={}
+        data['Name']=new_report_name
+        if (target_work_space_name != None):
+            target_workspace_id = self.find_entity_id_by_name(self.workspaces, target_work_space_name, "workspace", raise_if_missing=True)
+            data['targetWorkspaceId']= target_workspace_id
+        if (target_model_id != None):
+            data['targetModelId']= target_model_id
+ #       data="Name=" + new_report_name
         response = requests.post(url, data=data, headers=self.headers)
 
         if response.status_code == 200:
