@@ -498,5 +498,15 @@ class PowerBIAPIClient:
             logging.error("Dataset refresh failed!")
             self.force_raise_http_error(response, expected_codes=200)
     
+    @check_token
+    def get_dataset_datasources(self, dataset_id) -> List:
+        url = self.base_url + f"datasets/{dataset_id}/datasources"
+        response = requests.get(url, headers=self.headers)
 
+        if response.status_code == HTTP_OK_CODE:
+            self._workspaces = response.json()["value"]
+            return self._workspaces
+        else:
+            logging.error("Failed to datasources!")
+            self.force_raise_http_error(response)
 
