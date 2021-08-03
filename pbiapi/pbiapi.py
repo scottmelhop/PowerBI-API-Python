@@ -510,3 +510,23 @@ class PowerBIAPIClient:
             logging.error("Failed to datasources!")
             self.force_raise_http_error(response)
 
+    @check_token
+    def update_datasource(self, gateway_id: str, datasource_id: str, user_name: str, password: str):
+
+        url = self.base_url + f"gateways/{gateway_id}/datasources/{datasource_id}"
+        headers = {"Content-Type": "application/json", **self.get_auth_header()}
+        credentialDetails={"credentialType": "Basic",
+            "encryptedConnection": "Encrypted",
+            "encryptionAlgorithm": "None",
+            "privacyLevel": "None",
+            "useEndUserOAuth2Credentials": "False"}
+        credentialDetails['credentials']= "{\"credentialData\":[{\"name\":\"username\", \"value\":\"" + user_name + "\"},{\"name\":\"password\", \"value\":\"" + password + "\"}]}"
+        data={'credentialDetails': credentialDetails}
+        print(data)
+        
+        response = requests.patch(url, headers=headers, json=data)
+        if response.status_code == HTTP_OK_CODE:
+            logging.info(f"update credentials Complete")
+        else:
+            logging.error(f"update credentials failed for gateway_id {gateway_id} and  datasource_id {datasource_id}!")
+            self.force_raise_http_error(response)
