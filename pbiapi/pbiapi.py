@@ -158,6 +158,17 @@ class PowerBIAPIClient:
             return response.json()["value"]
 
     @check_token
+    def get_datasets(self) -> List:
+
+        datasets_url = self.base_url + f"datasets"
+        response = requests.get(datasets_url, headers=self.headers)
+        response.raise_for_status()
+        if response.status_code == HTTP_OK_CODE:
+            return response.json()["value"]
+
+
+
+    @check_token
     def refresh_dataset_by_id(self, workspace_name: str, dataset_id: str) -> None:
         workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
         url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}/refreshes"
@@ -529,4 +540,20 @@ class PowerBIAPIClient:
             logging.info(f"update credentials Complete")
         else:
             logging.error(f"update credentials failed for gateway_id {gateway_id} and  datasource_id {datasource_id}!")
+            self.force_raise_http_error(response)
+
+    @check_token
+    def execute_queries(self, workspace_name: str, dataset_name: str, query_list: list) -> None:
+        datasets = self.get_datasets_in_workspace(workspace_name)
+        dataset_id = self.find_entity_id_by_name(datasets, dataset_name, "dataset", True)
+        queries = {"queries": query_list}
+        # Workspace exists, lets add user:
+        url = self.base_url + f"datasets/{dataset_id}/executeQueries"
+        headers=self.headers
+        headers['Content-Length']='0'
+        response = requests.post(url, data=queries, headers=self.headers)
+        if response.status_code == HTTP_OK_CODE:
+            logging.info(f"success execute_queries")
+        else:
+            logging.error(f"Failed to execute_queries': {list}")
             self.force_raise_http_error(response)
