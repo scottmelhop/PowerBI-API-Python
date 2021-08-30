@@ -3,7 +3,7 @@ import logging
 import os
 from typing import Callable, Dict, List, NoReturn, Union
 from urllib import parse
-
+import json
 import requests
 
 from pbiapi.utils import partition
@@ -522,16 +522,29 @@ class PowerBIAPIClient:
             self.force_raise_http_error(response)
 
     @check_token
+    def get_dataset_datasources_by_name(self, workspace_name,dataset_name) -> List:
+        workspace_id, dataset_id = self.get_workspace_and_dataset_id(workspace_name, dataset_name)
+        print('workspace_id: %s , dataset id: %s' %  (workspace_id, dataset_id ))
+        return(self.get_dataset_datasources(workspace_id,dataset_id))
+
+
+
+    @check_token
     def update_datasource(self, gateway_id: str, datasource_id: str, user_name: str, password: str):
 
         url = self.base_url + f"gateways/{gateway_id}/datasources/{datasource_id}"
         headers = {"Content-Type": "application/json", **self.get_auth_header()}
+ 
+#"credentials": "{\"credentialData\":[{\"name\":\"username\", \"value\":\"reports_db_master@reports-production-db-server\"},{\"name\":\"password\", \"value\":\"AkuoKfo2@\"}]}",
+
         credentialDetails={"credentialType": "Basic",
             "encryptedConnection": "Encrypted",
             "encryptionAlgorithm": "None",
             "privacyLevel": "None",
             "useEndUserOAuth2Credentials": "False"}
-        credentialDetails['credentials']= "{\"credentialData\":[{\"name\":\"username\", \"value\":\"" + user_name + "\"},{\"name\":\"password\", \"value\":\"" + password + "\"}]}"
+        credentialDetails["credentials"]="{'credentialData':[{'name':'username', 'value':'reports_db_master@reports-production-db-server'},{'name':'password', 'value': 'AkuoKfo2@'}]}"
+ #       credentialDetails['"{\"credentialData\":[{\"name\":\"username\", \"value\":\"" + user_name + "\"},{\"name\":\"password\", \"value\":\"" + password + "\"}]}"']= "{\"credentialData\":[{\"name\":\"username\", \"value\":\"" + user_name + "\"},{\"name\":\"password\", \"value\":\"" + password + "\"}]}"
+        
         data={'credentialDetails': credentialDetails}
         print(data)
         
@@ -543,17 +556,39 @@ class PowerBIAPIClient:
             self.force_raise_http_error(response)
 
     @check_token
-    def execute_queries(self, workspace_name: str, dataset_name: str, query_list: list) -> None:
-        datasets = self.get_datasets_in_workspace(workspace_name)
-        dataset_id = self.find_entity_id_by_name(datasets, dataset_name, "dataset", True)
-        queries = {"queries": query_list}
+    def execute_queries(self,  dataset_id: str, query_list: list, serializerSettings: dict) -> None:
+ 
+        body = {"queries": query_list, "serializerSettings": serializerSettings}
         # Workspace exists, lets add user:
         url = self.base_url + f"datasets/{dataset_id}/executeQueries"
-        headers=self.headers
-        headers['Content-Length']='0'
-        response = requests.post(url, data=queries, headers=self.headers)
+        print ('url=%s' % url)
+        headers = {"Content-Type": "application/json", **self.get_auth_header()}
+        print ('headers=%s' % headers)
+        print ('json=%s' % json)
+        response = requests.post(url, json=body, headers=headers)
+
         if response.status_code == HTTP_OK_CODE:
             logging.info(f"success execute_queries")
+            return(json.loads(response.text.encode('utf8')))
         else:
-            logging.error(f"Failed to execute_queries': {list}")
+            logging.error(f"Failed to execute_queries': {json}")
+            self.force_raise_http_error(response)
+ 
+    @check_token
+    def execute_queries_by_name(self, workspace_name: str, dataset_name: str, query_list: list,  serializerSettings: dict) -> None:
+        datasets = self.get_datasets_in_workspace(workspace_name)
+        dataset_id = self.find_entity_id_by_name(datasets, dataset_name, "dataset", True)
+        return(self.execute_queries(dataset_id=dataset_id, query_list=query_list, serializerSettings=serializerSettings))
+
+    @check_token
+    def bind_to_gateway(self, dataset_Id: str, gateway_id: str) -> None:
+#403: {"Message":"API is not accessible for application"}
+        url = self.base_url + f"datasets/{dataset_Id}/Default.BindToGateway"
+        gatewayObject={"gatewayObjectId": gateway_id}
+        response = requests.post(url, json=gatewayObject, headers=self.headers)
+
+        if response.status_code == HTTP_OK_CODE:
+            logging.info(f"Takeover of dataset {dataset_Id} Complete")
+        else:
+            logging.error(f"Takeover of dataset {dataset_Id} failed!")
             self.force_raise_http_error(response)
