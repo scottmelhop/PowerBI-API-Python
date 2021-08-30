@@ -430,8 +430,9 @@ class PowerBIAPIClient:
 
     def get_workspace_and_dataset_id(self, workspace_name: str, dataset_name: str) -> Union:
         workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
-
+        print ('workspace_id=%s' % workspace_id)
         datasets = self.get_datasets_in_workspace(workspace_name)
+        print ('datasets=%s' % datasets)
         dataset_id = self.find_entity_id_by_name(datasets, dataset_name, "dataset", raise_if_missing=True)
 
         return workspace_id, dataset_id
@@ -490,7 +491,7 @@ class PowerBIAPIClient:
     def clone_report_by_name(self, workspace_name: str, report_name: str, new_report_name: str , target_work_space_name: str=None, target_model_id: str=None) -> None:
         workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
         workspace_reports=self.get_reports_in_workspace(workspace_name)
-        report_id=self.find_entity_id_by_name(workspace_reports, report_name, "reports", raise_if_missing=True)        
+        report_id=self.find_entity_id_by_name(workspace_reports, report_name, "reports", raise_if_missing=True)
         url = self.base_url + f"groups/{workspace_id}/reports/{report_id}/Clone"
         data={}
         data['Name']=new_report_name
@@ -508,7 +509,7 @@ class PowerBIAPIClient:
         else:
             logging.error("Dataset refresh failed!")
             self.force_raise_http_error(response, expected_codes=200)
-    
+
     @check_token
     def get_dataset_datasources(self, workspace_id,dataset_id) -> List:
         url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}/datasources"
@@ -534,17 +535,19 @@ class PowerBIAPIClient:
 
         url = self.base_url + f"gateways/{gateway_id}/datasources/{datasource_id}"
         headers = {"Content-Type": "application/json", **self.get_auth_header()}
- 
+
         credentialDetails={"credentialType": "Basic",
             "encryptedConnection": "Encrypted",
             "encryptionAlgorithm": "None",
             "privacyLevel": "None",
             "useEndUserOAuth2Credentials": "False"}
-        credentialDetails["credentials"]="{'credentialData':[{'name':'username', 'value': user_name},{'name':'password', 'value': password}]}"
-    
+
+        credentials={}
+        credentials['credentialData']=[{'name': 'username' , 'value': user_name} ,{'name': 'password', 'value': password} ]
+        credentialDetails["credentials"]=str(credentials)
         data={'credentialDetails': credentialDetails}
         print(data)
-        
+
         response = requests.patch(url, headers=headers, json=data)
         if response.status_code == HTTP_OK_CODE:
             logging.info(f"update credentials Complete")
@@ -554,7 +557,7 @@ class PowerBIAPIClient:
 
     @check_token
     def execute_queries(self,  dataset_id: str, query_list: list, serializerSettings: dict) -> None:
- 
+
         body = {"queries": query_list, "serializerSettings": serializerSettings}
         # Workspace exists, lets add user:
         url = self.base_url + f"datasets/{dataset_id}/executeQueries"
@@ -570,7 +573,7 @@ class PowerBIAPIClient:
         else:
             logging.error(f"Failed to execute_queries': {json}")
             self.force_raise_http_error(response)
- 
+
     @check_token
     def execute_queries_by_name(self, workspace_name: str, dataset_name: str, query_list: list,  serializerSettings: dict) -> None:
         datasets = self.get_datasets_in_workspace(workspace_name)
