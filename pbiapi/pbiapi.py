@@ -1,9 +1,10 @@
 import datetime
+import json
 import logging
 import os
 from typing import Callable, Dict, List, NoReturn, Union
 from urllib import parse
-import json
+
 import requests
 
 from pbiapi.utils import partition
@@ -70,10 +71,17 @@ class PowerBIAPIClient:
             self.force_raise_http_error(response)
 
     @staticmethod
-    def find_entity_id_by_name(entity_list: List, name: str, entity_type: str , raise_if_missing: bool = False ,attribute_name_alias: str = "name") -> str:
+    def find_entity_id_by_name(
+        entity_list: List,
+        name: str,
+        entity_type: str,
+        raise_if_missing: bool = False,
+        attribute_name_alias: str = "name",
+        attribute_alias: str = "id",
+    ) -> str:
         for item in entity_list:
             if item[attribute_name_alias] == name:
-                return item["id"]
+                return item[attribute_alias]
         if raise_if_missing:
             raise RuntimeError(f"No {entity_type} was found with the name: '{name}'")
 
@@ -165,8 +173,6 @@ class PowerBIAPIClient:
         response.raise_for_status()
         if response.status_code == HTTP_OK_CODE:
             return response.json()["value"]
-
-
 
     @check_token
     def refresh_dataset_by_id(self, workspace_name: str, dataset_id: str) -> None:
@@ -430,9 +436,9 @@ class PowerBIAPIClient:
 
     def get_workspace_and_dataset_id(self, workspace_name: str, dataset_name: str) -> Union:
         workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
-        print ('workspace_id=%s' % workspace_id)
+        print("workspace_id=%s" % workspace_id)
         datasets = self.get_datasets_in_workspace(workspace_name)
-        print ('datasets=%s' % datasets)
+        print("datasets=%s" % datasets)
         dataset_id = self.find_entity_id_by_name(datasets, dataset_name, "dataset", raise_if_missing=True)
 
         return workspace_id, dataset_id
@@ -449,9 +455,8 @@ class PowerBIAPIClient:
             logging.error("Failed to fetch pipelines!")
             self.force_raise_http_error(response)
 
-
     @check_token
-    def get_pipeline(self, pipeline_id: str ) -> List:
+    def get_pipeline(self, pipeline_id: str) -> List:
         url = self.base_url + f"pipelines/{pipeline_id}"
         response = requests.get(url, headers=self.headers)
         print(response.json())
@@ -464,10 +469,12 @@ class PowerBIAPIClient:
 
     @check_token
     def get_pipeline_by_name(self, pipeline_name) -> List:
-        pipelines_list=self.get_pipelines()
-        pipeline_id = self.find_entity_id_by_name(pipelines_list, pipeline_name, "pipelines", raise_if_missing=True,attribute_name_alias='displayName' )
-        print('pipeline id: %s' %  pipeline_id)
-        return (self.get_pipeline(pipeline_id))
+        pipelines_list = self.get_pipelines()
+        pipeline_id = self.find_entity_id_by_name(
+            pipelines_list, pipeline_name, "pipelines", raise_if_missing=True, attribute_name_alias="displayName"
+        )
+        print("pipeline id: %s" % pipeline_id)
+        return self.get_pipeline(pipeline_id)
 
     @check_token
     def get_pipeline_operations(self, pipeline_id: str) -> List:
@@ -479,39 +486,50 @@ class PowerBIAPIClient:
         else:
             logging.error("Failed to fetch pipeline operations!")
             self.force_raise_http_error(response)
+
     @check_token
     def get_pipeline_operations_by_name(self, pipeline_name: str) -> List:
-        pipelines_list=self.get_pipelines()
-        pipeline_id = self.find_entity_id_by_name(pipelines_list, pipeline_name, "pipelines", raise_if_missing=True,attribute_name_alias='displayName' )
-        print('pipeline id: %s' %  pipeline_id)
-        return (self.get_pipeline_operations(pipeline_id))
-
+        pipelines_list = self.get_pipelines()
+        pipeline_id = self.find_entity_id_by_name(
+            pipelines_list, pipeline_name, "pipelines", raise_if_missing=True, attribute_name_alias="displayName"
+        )
+        print("pipeline id: %s" % pipeline_id)
+        return self.get_pipeline_operations(pipeline_id)
 
     @check_token
-    def clone_report_by_name(self, workspace_name: str, report_name: str, new_report_name: str , target_work_space_name: str=None, target_model_id: str=None) -> None:
+    def clone_report_by_name(
+        self,
+        workspace_name: str,
+        report_name: str,
+        new_report_name: str,
+        target_work_space_name: str = None,
+        target_model_id: str = None,
+    ) -> None:
         workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
-        workspace_reports=self.get_reports_in_workspace(workspace_name)
-        report_id=self.find_entity_id_by_name(workspace_reports, report_name, "reports", raise_if_missing=True)
+        workspace_reports = self.get_reports_in_workspace(workspace_name)
+        report_id = self.find_entity_id_by_name(workspace_reports, report_name, "reports", raise_if_missing=True)
         url = self.base_url + f"groups/{workspace_id}/reports/{report_id}/Clone"
-        data={}
-        data['Name']=new_report_name
-        if (target_work_space_name != None):
-            target_workspace_id = self.find_entity_id_by_name(self.workspaces, target_work_space_name, "workspace", raise_if_missing=True)
-            data['targetWorkspaceId']= target_workspace_id
-        if (target_model_id != None):
-            data['targetModelId']= target_model_id
- #       data="Name=" + new_report_name
+        data = {}
+        data["Name"] = new_report_name
+        if target_work_space_name != None:
+            target_workspace_id = self.find_entity_id_by_name(
+                self.workspaces, target_work_space_name, "workspace", raise_if_missing=True
+            )
+            data["targetWorkspaceId"] = target_workspace_id
+        if target_model_id != None:
+            data["targetModelId"] = target_model_id
+        #       data="Name=" + new_report_name
         response = requests.post(url, data=data, headers=self.headers)
 
         if response.status_code == 200:
             logging.info(f"report  {report_id} from workspace {workspace_name}) was cloned ")
-            return (response.json())
+            return response.json()
         else:
             logging.error("Dataset refresh failed!")
             self.force_raise_http_error(response, expected_codes=200)
 
     @check_token
-    def get_dataset_datasources(self, workspace_id,dataset_id) -> List:
+    def get_dataset_datasources(self, workspace_id, dataset_id) -> List:
         url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}/datasources"
         response = requests.get(url, headers=self.headers)
 
@@ -523,12 +541,10 @@ class PowerBIAPIClient:
             self.force_raise_http_error(response)
 
     @check_token
-    def get_dataset_datasources_by_name(self, workspace_name,dataset_name) -> List:
+    def get_dataset_datasources_by_name(self, workspace_name, dataset_name) -> List:
         workspace_id, dataset_id = self.get_workspace_and_dataset_id(workspace_name, dataset_name)
-        print('workspace_id: %s , dataset id: %s' %  (workspace_id, dataset_id ))
-        return(self.get_dataset_datasources(workspace_id,dataset_id))
-
-
+        print("workspace_id: %s , dataset id: %s" % (workspace_id, dataset_id))
+        return self.get_dataset_datasources(workspace_id, dataset_id)
 
     @check_token
     def update_datasource(self, gateway_id: str, datasource_id: str, user_name: str, password: str):
@@ -536,16 +552,21 @@ class PowerBIAPIClient:
         url = self.base_url + f"gateways/{gateway_id}/datasources/{datasource_id}"
         headers = {"Content-Type": "application/json", **self.get_auth_header()}
 
-        credentialDetails={"credentialType": "Basic",
+        credentialDetails = {
+            "credentialType": "Basic",
             "encryptedConnection": "Encrypted",
             "encryptionAlgorithm": "None",
             "privacyLevel": "None",
-            "useEndUserOAuth2Credentials": "False"}
+            "useEndUserOAuth2Credentials": "False",
+        }
 
-        credentials={}
-        credentials['credentialData']=[{'name': 'username' , 'value': user_name} ,{'name': 'password', 'value': password} ]
-        credentialDetails["credentials"]=str(credentials)
-        data={'credentialDetails': credentialDetails}
+        credentials = {}
+        credentials["credentialData"] = [
+            {"name": "username", "value": user_name},
+            {"name": "password", "value": password},
+        ]
+        credentialDetails["credentials"] = str(credentials)
+        data = {"credentialDetails": credentialDetails}
         print(data)
 
         response = requests.patch(url, headers=headers, json=data)
@@ -556,35 +577,37 @@ class PowerBIAPIClient:
             self.force_raise_http_error(response)
 
     @check_token
-    def execute_queries(self,  dataset_id: str, query_list: list, serializerSettings: dict) -> None:
+    def execute_queries(self, dataset_id: str, query_list: list, serializerSettings: dict) -> None:
 
         body = {"queries": query_list, "serializerSettings": serializerSettings}
         # Workspace exists, lets add user:
         url = self.base_url + f"datasets/{dataset_id}/executeQueries"
-        print ('url=%s' % url)
+        print("url=%s" % url)
         headers = {"Content-Type": "application/json", **self.get_auth_header()}
-        print ('headers=%s' % headers)
-        print ('json=%s' % json)
+        print("headers=%s" % headers)
+        print("json=%s" % json)
         response = requests.post(url, json=body, headers=headers)
 
         if response.status_code == HTTP_OK_CODE:
             logging.info(f"success execute_queries")
-            return(json.loads(response.text.encode('utf8')))
+            return json.loads(response.text.encode("utf8"))
         else:
             logging.error(f"Failed to execute_queries': {json}")
             self.force_raise_http_error(response)
 
     @check_token
-    def execute_queries_by_name(self, workspace_name: str, dataset_name: str, query_list: list,  serializerSettings: dict) -> None:
+    def execute_queries_by_name(
+        self, workspace_name: str, dataset_name: str, query_list: list, serializerSettings: dict
+    ) -> None:
         datasets = self.get_datasets_in_workspace(workspace_name)
         dataset_id = self.find_entity_id_by_name(datasets, dataset_name, "dataset", True)
-        return(self.execute_queries(dataset_id=dataset_id, query_list=query_list, serializerSettings=serializerSettings))
+        return self.execute_queries(dataset_id=dataset_id, query_list=query_list, serializerSettings=serializerSettings)
 
     @check_token
     def bind_to_gateway(self, dataset_Id: str, gateway_id: str) -> None:
-#403: {"Message":"API is not accessible for application"}
+        # 403: {"Message":"API is not accessible for application"}
         url = self.base_url + f"datasets/{dataset_Id}/Default.BindToGateway"
-        gatewayObject={"gatewayObjectId": gateway_id}
+        gatewayObject = {"gatewayObjectId": gateway_id}
         response = requests.post(url, json=gatewayObject, headers=self.headers)
 
         if response.status_code == HTTP_OK_CODE:
@@ -592,3 +615,32 @@ class PowerBIAPIClient:
         else:
             logging.error(f"Takeover of dataset {dataset_Id} failed!")
             self.force_raise_http_error(response)
+
+    @check_token
+    def get_workspace_and_report_id(self, workspace_name: str, report_name: str) -> Union:
+        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
+        print("workspace_id=%s" % workspace_id)
+        reports = self.get_reports_in_workspace(workspace_name)
+        print("datasets=%s" % reports)
+        report_id = self.find_entity_id_by_name(
+            reports, report_name, "report", raise_if_missing=True, attribute_name_alias="name", attribute_alias="id"
+        )
+        dataset_id = self.find_entity_id_by_name(
+            reports,
+            report_name,
+            "report",
+            raise_if_missing=True,
+            attribute_name_alias="name",
+            attribute_alias="datasetId",
+        )
+
+        return workspace_id, report_id, dataset_id
+
+    def get_dataset_in_workspace(self, workspace_name: str, dataset_id: str) -> List:
+        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
+
+        datasets_url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}"
+        response = requests.get(datasets_url, headers=self.headers)
+        response.raise_for_status()
+        if response.status_code == HTTP_OK_CODE:
+            return response.json()
