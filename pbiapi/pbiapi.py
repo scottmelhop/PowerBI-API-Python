@@ -79,7 +79,9 @@ class PowerBIAPIClient:
         attribute_name_alias: str = "name",
         attribute_alias: str = "id",
     ) -> str:
+        print('lower name=%s' % name.lower())
         for item in entity_list:
+            print('item[attribute_name_alias].lower()=%s' % item[attribute_name_alias].lower())
             if item[attribute_name_alias].lower() == name.lower():
                 return item[attribute_alias]
         if raise_if_missing:
