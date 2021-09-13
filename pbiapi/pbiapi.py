@@ -80,7 +80,7 @@ class PowerBIAPIClient:
         attribute_alias: str = "id",
     ) -> str:
         for item in entity_list:
-            if item[attribute_name_alias] == name:
+            if item[attribute_name_alias].lower() == name.lower():
                 return item[attribute_alias]
         if raise_if_missing:
             raise RuntimeError(f"No {entity_type} was found with the name: '{name}'")
