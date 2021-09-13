@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pbiapi"
-version = "0.2.2"
+version = "0.2.4"
 description = "A Python library for working with the Power BI API"
 authors = ["Scott Melhop <scott.melhop@cognite.com>"]
 repository = "https://github.com/scottmelhop/PowerBI-API-Python"
