@@ -646,3 +646,20 @@ class PowerBIAPIClient:
         response.raise_for_status()
         if response.status_code == HTTP_OK_CODE:
             return response.json()
+
+    @check_token
+    def get_datasets_in_workspace_by_id(self, workspace_id: str) -> List:
+        datasets_url = self.base_url + f"groups/{workspace_id}/datasets"
+        response = requests.get(datasets_url, headers=self.headers)
+        response.raise_for_status()
+        if response.status_code == HTTP_OK_CODE:
+            return response.json()["value"]           
+    def print_all_datasources(self):        
+        for ws in self.workspaces:
+            wsname=ws['name']
+            dss=self.get_datasets_in_workspace_by_id(ws['id'])
+            print ('ws name: %s, ws id: %s' % (wsname, ws['id']) )
+            for ds in dss:
+                print ('   dataset=%s datasetId=%s' % (ds['name'], ds['id']))
+                datasource=self.get_dataset_datasources(ws['id'], ds['id'])
+                print ('         datasource: %s' % datasource)
