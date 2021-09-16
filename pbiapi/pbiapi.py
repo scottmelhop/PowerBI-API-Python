@@ -79,9 +79,9 @@ class PowerBIAPIClient:
         attribute_name_alias: str = "name",
         attribute_alias: str = "id",
     ) -> str:
-        print('lower name=%s' % name.lower())
+ #       print('lower name=%s' % name.lower())
         for item in entity_list:
-            print('item[attribute_name_alias].lower()=%s' % item[attribute_name_alias].lower())
+ #           print('item[attribute_name_alias].lower()=%s' % item[attribute_name_alias].lower())
             if item[attribute_name_alias].lower() == name.lower():
                 return item[attribute_alias]
         if raise_if_missing:
@@ -99,7 +99,8 @@ class PowerBIAPIClient:
 
         if response.json()["@odata.count"] > 0:
             logging.info("Workspace already exists, no changes made!")
-            return
+#            print(response.json())
+            return response.json()["value"][0]['id']
 
         # Workspace does not exist, lets create it:
         logging.info(f"Trying to create a workspace with name: {name}...")
@@ -109,6 +110,8 @@ class PowerBIAPIClient:
         if response.status_code == HTTP_OK_CODE:
             logging.info("Workspace created successfully!")
             self.get_workspaces()  # Update internal state
+ #           print(response.json())
+            return response.json()['id']
         else:
             logging.error(f"Failed to create the new workspace: '{name}':")
             self.force_raise_http_error(response)
@@ -167,6 +170,7 @@ class PowerBIAPIClient:
         if response.status_code == HTTP_OK_CODE:
             return response.json()["value"]
 
+
     @check_token
     def get_datasets(self) -> List:
 
@@ -177,8 +181,7 @@ class PowerBIAPIClient:
             return response.json()["value"]
 
     @check_token
-    def refresh_dataset_by_id(self, workspace_name: str, dataset_id: str) -> None:
-        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
+    def refresh_dataset_by_id(self, workspace_id: str, dataset_id: str) -> None:
         url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}/refreshes"
         response = requests.post(url, data="notifyOption=NoNotification", headers=self.headers)
 
@@ -190,9 +193,10 @@ class PowerBIAPIClient:
 
     @check_token
     def refresh_dataset_by_name(self, workspace_name: str, dataset_name: str) -> None:
+        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
         datasets = self.get_datasets_in_workspace(workspace_name)
         dataset_id = self.find_entity_id_by_name(datasets, dataset_name, "dataset", True)
-        self.refresh_dataset_by_id(workspace_name, dataset_id)
+        self.refresh_dataset_by_id(workspace_id, dataset_id)
 
     @check_token
     def create_push_dataset(self, workspace_name: str, retention_policy: str) -> None:
@@ -386,6 +390,25 @@ class PowerBIAPIClient:
             logging.error(f"Parameter update failed for dataset {dataset_name}!")
             self.force_raise_http_error(response)
 
+
+    @check_token
+    def update_parameters_in_dataset_by_id(self, workspace_id: str, dataset_id: str, parameters: list):
+        update_details = {"updateDetails": parameters}
+        url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}/UpdateParameters"
+        headers = {"Content-Type": "application/json", **self.get_auth_header()}
+        response = requests.post(url, json=update_details, headers=headers)
+
+        if response.status_code == HTTP_OK_CODE:
+            for parameter in parameters:
+                logging.info(
+                    f"Parameter \"{parameter['name']}\"",
+                    f" updated to \"{parameter['newValue']}\"",
+                    f" in Dataset named '{dataset_id}' in workspace '{workspace_id}'!",
+                )
+        else:
+            logging.error(f"Parameter update failed for dataset {dataset_id}!")
+            self.force_raise_http_error(response)
+
     @check_token
     def get_parameters_in_dataset(self, workspace_name: str, dataset_name: str) -> List:
         workspace_id, dataset_id = self.get_workspace_and_dataset_id(workspace_name, dataset_name)
@@ -438,9 +461,9 @@ class PowerBIAPIClient:
 
     def get_workspace_and_dataset_id(self, workspace_name: str, dataset_name: str) -> Union:
         workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
-        print("workspace_id=%s" % workspace_id)
+ #       print("workspace_id=%s" % workspace_id)
         datasets = self.get_datasets_in_workspace(workspace_name)
-        print("datasets=%s" % datasets)
+ #       print("datasets=%s" % datasets)
         dataset_id = self.find_entity_id_by_name(datasets, dataset_name, "dataset", raise_if_missing=True)
 
         return workspace_id, dataset_id
@@ -461,7 +484,7 @@ class PowerBIAPIClient:
     def get_pipeline(self, pipeline_id: str) -> List:
         url = self.base_url + f"pipelines/{pipeline_id}"
         response = requests.get(url, headers=self.headers)
-        print(response.json())
+ #       print(response.json())
         if response.status_code == HTTP_OK_CODE:
             self._workspaces = response.json()
             return self._workspaces
@@ -569,7 +592,6 @@ class PowerBIAPIClient:
         ]
         credentialDetails["credentials"] = str(credentials)
         data = {"credentialDetails": credentialDetails}
-        print(data)
 
         response = requests.patch(url, headers=headers, json=data)
         if response.status_code == HTTP_OK_CODE:
