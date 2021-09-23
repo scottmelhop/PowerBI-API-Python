@@ -294,6 +294,14 @@ class PowerBIAPIClient:
 
         if response.status_code == HTTP_OK_CODE:
             return response.json()["value"]
+    @check_token
+    def get_reports_in_workspace_by_id(self, workspace_id: str) -> List:
+ 
+        url = self.base_url + f"groups/{workspace_id}/reports"
+        response = requests.get(url, headers=self.headers)
+
+        if response.status_code == HTTP_OK_CODE:
+            return response.json()["value"]
 
     @check_token
     def rebind_report_in_workspace(self, workspace_name: str, dataset_name: str, report_name: str) -> None:
@@ -366,7 +374,7 @@ class PowerBIAPIClient:
 
             if response.json()["importState"] == "Succeeded":
                 logging.info("Import complete")
-                return
+                return response
             else:
                 logging.info("Import in progress...")
 
@@ -685,3 +693,73 @@ class PowerBIAPIClient:
                 print ('   dataset=%s datasetId=%s' % (ds['name'], ds['id']))
                 datasource=self.get_dataset_datasources(ws['id'], ds['id'])
                 print ('         datasource: %s' % datasource)
+            
+    @staticmethod
+    def find_entity_by_name(
+        entity_list: List,
+        name: str,
+        entity_type: str,
+        raise_if_missing: bool = False,
+        attribute_name_alias: str = "name",
+        attribute_alias: str = "id",
+    ) -> str:
+        for item in entity_list:
+            if item[attribute_name_alias].lower() == name.lower():
+                return item
+        if raise_if_missing:
+            raise RuntimeError(f"No {entity_type} was found with the name: '{name}'")
+
+    def get_report_by_workspace_id_and_report_id(self, workspace_id: str, report_id: str) -> dict:
+        
+        url = self.base_url + f"groups/{workspace_id}/reports/{report_id}"
+        response = requests.get(url, headers=self.headers)
+
+        if response.status_code == HTTP_OK_CODE:
+            return response.json()
+
+    @check_token
+    def rebind_report_in_workspace_by_id(self, workspace_id: str, dataset_id: str, report_id: str) -> None:
+
+        url = self.base_url + f"groups/{workspace_id}/reports/{report_id}/Rebind"
+        headers = {"Content-Type": "application/json", **self.get_auth_header()}
+        payload = {"datasetId": dataset_id}
+
+        response = requests.post(url, json=payload, headers=headers)
+        if response.status_code == HTTP_OK_CODE:
+            logging.info(f"Report named '{report_name}' rebound to dataset with name '{dataset_name}'")
+        else:
+            logging.error(f"Failed to rebind report with name '{report_name}' to dataset with name '{dataset_name}'")
+            self.force_raise_http_error(response)
+
+
+    @check_token
+    def clone_report_by_id(
+        self,
+        workspace_id: str,
+        report_id: str,
+        new_report_name: str,
+        target_workspace_id: str = None,
+        target_model_id: str = None,
+    ) -> None:
+        url = self.base_url + f"groups/{workspace_id}/reports/{report_id}/Clone"
+        data = {}
+        data["Name"] = new_report_name
+        if target_workspace_id != None:
+            data["targetWorkspaceId"] = target_workspace_id
+        if target_model_id != None:
+            data["targetModelId"] = target_model_id
+        response = requests.post(url, data=data, headers=self.headers)
+
+        if response.status_code == 200:
+            logging.info(f"report  {report_id} from workspace {workspace_id}) was cloned ")
+            return response.json()
+        else:
+            logging.error("Dataset refresh failed!")
+            self.force_raise_http_error(response, expected_codes=200)
+
+
+    @check_token
+    def get_dataset_by_ws_id_and_ds_name(self, workspace_id: str, dataset_name: str) -> None:
+        datasets = self.get_datasets_in_workspace_by_id(workspace_id)
+        dataset = self.find_entity_by_name(datasets, dataset_name, "dataset", True)
+        return (dataset)
