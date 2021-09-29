@@ -726,9 +726,9 @@ class PowerBIAPIClient:
 
         response = requests.post(url, json=payload, headers=headers)
         if response.status_code == HTTP_OK_CODE:
-            logging.info(f"Report named '{report_name}' rebound to dataset with name '{dataset_name}'")
+            logging.info(f"Report named '{report_id}' rebound to dataset with name '{dataset_id}'")
         else:
-            logging.error(f"Failed to rebind report with name '{report_name}' to dataset with name '{dataset_name}'")
+            logging.error(f"Failed to rebind report with name '{report_id}' to dataset with name '{dataset_id}'")
             self.force_raise_http_error(response)
 
 
