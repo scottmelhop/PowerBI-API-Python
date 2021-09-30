@@ -616,7 +616,6 @@ class PowerBIAPIClient:
         url = self.base_url + f"datasets/{dataset_id}/executeQueries"
         print("url=%s" % url)
         headers = {"Content-Type": "application/json", **self.get_auth_header()}
-        print("headers=%s" % headers)
         print("json=%s" % json)
         response = requests.post(url, json=body, headers=headers)
 
