@@ -87,6 +87,22 @@ class PowerBIAPIClient:
         if raise_if_missing:
             raise RuntimeError(f"No {entity_type} was found with the name: '{name}'")
 
+    @staticmethod
+    def find_entities_list_id_by_name(
+        entity_list: List,
+        name: str,
+        entity_type: str,
+        attribute_name_alias: str = "name",
+        attribute_alias: str = "id",
+    ) -> str:
+        items=[]
+        for item in entity_list:
+            if item[attribute_name_alias].lower() == name.lower():
+                items.append(item[attribute_alias])
+        return items
+
+        
+
     @check_token
     def create_workspace(self, name: str) -> None:
         # Check if workspace exists already:
@@ -762,3 +778,16 @@ class PowerBIAPIClient:
         datasets = self.get_datasets_in_workspace_by_id(workspace_id)
         dataset = self.find_entity_by_name(datasets, dataset_name, "dataset", True)
         return (dataset)
+
+    @check_token
+    def delete_reports_by_workspace_id(self, workspace_id: str, report_name: str) -> None:
+        reports = self.get_reports_in_workspace_by_id(workspace_id)
+        report_id_list = self.find_entities_list_id_by_name(reports, report_name, "report")
+        for report_id in report_id_list:
+            url = self.base_url + f"groups/{workspace_id}/reports/{report_id}"
+            response = requests.delete(url, headers=self.headers)
+            if response.status_code == HTTP_OK_CODE:
+                logging.info(f"Report named '{report_name}' with id '{report_id}' in workspace '{workspace_id}' deleted successfully!")
+            else:
+                logging.error("Report deletion failed!")
+                self.force_raise_http_error(response)
