@@ -300,7 +300,11 @@ class PowerBIAPIClient:
         else:
             logging.error("Table truncation failed!")
             self.force_raise_http_error(response)
-
+    @check_token
+    def is_report_in_workspace(self, workspace_id: str, report_name: str):
+        reports = self.get_reports_in_workspace_by_id(workspace_id)
+        report_id_list = self.find_entities_list_id_by_name(reports, report_name, "report")
+        return (len (report_id_list)>0 )
     @check_token
     def get_reports_in_workspace(self, workspace_name: str) -> List:
         workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
@@ -355,14 +359,12 @@ class PowerBIAPIClient:
 
     @check_token
     def import_file_into_workspace(
-        self, workspace_name: str, skip_report: bool, file_path: str, display_name: str
+        self, workspace_name: str, skip_report: bool, file_path: str, display_name: str, name_conflict: str ='CreateOrOverwrite'
     ) -> None:
         workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
 
         if not os.path.isfile(file_path):
-            raise FileNotFoundError(2, f"No such file or directory: '{file_path}'")
-
-        name_conflict = "CreateOrOverwrite"
+            raise FileNotFoundError(2, f"No such file or directory: '{file_path}'")  
         url = (
             self.base_url
             + f"groups/{workspace_id}/imports?datasetDisplayName={display_name}&nameConflict="
