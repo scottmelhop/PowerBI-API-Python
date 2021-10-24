@@ -300,11 +300,7 @@ class PowerBIAPIClient:
         else:
             logging.error("Table truncation failed!")
             self.force_raise_http_error(response)
-    @check_token
-    def is_report_in_workspace(self, workspace_id: str, report_name: str):
-        reports = self.get_reports_in_workspace_by_id(workspace_id)
-        report_id_list = self.find_entities_list_id_by_name(reports, report_name, "report")
-        return (len (report_id_list)>0 )
+
     @check_token
     def get_reports_in_workspace(self, workspace_name: str) -> List:
         workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
@@ -322,6 +318,18 @@ class PowerBIAPIClient:
 
         if response.status_code == HTTP_OK_CODE:
             return response.json()["value"]
+    @check_token
+    def is_report_in_workspace(self, workspace_id: str, report_name: str):
+        reports = self.get_reports_in_workspace_by_id(workspace_id)
+        report_id_list = self.find_entities_list_id_by_name(reports, report_name, "report")
+        return (len (report_id_list)>0 )
+
+    @check_token
+    def get_reports_id_by_name_in_workspace(self, workspace_id: str, report_name: str):
+        reports = self.get_reports_in_workspace_by_id(workspace_id)
+        report_id_list = self.find_entities_list_id_by_name(reports, report_name, "report")
+        return (report_id_list)
+        
 
     @check_token
     def rebind_report_in_workspace(self, workspace_name: str, dataset_name: str, report_name: str) -> None:
@@ -364,7 +372,8 @@ class PowerBIAPIClient:
         workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
 
         if not os.path.isfile(file_path):
-            raise FileNotFoundError(2, f"No such file or directory: '{file_path}'")  
+            raise FileNotFoundError(2, f"No such file or directory: '{file_path}'")
+
         url = (
             self.base_url
             + f"groups/{workspace_id}/imports?datasetDisplayName={display_name}&nameConflict="
@@ -793,3 +802,32 @@ class PowerBIAPIClient:
             else:
                 logging.error("Report deletion failed!")
                 self.force_raise_http_error(response)
+    @check_token
+    def delete_reports_by_report_id_and_workspace_id(self, workspace_id: str, report_id: str) -> None:
+            url = self.base_url + f"groups/{workspace_id}/reports/{report_id}"
+            response = requests.delete(url, headers=self.headers)
+            if response.status_code == HTTP_OK_CODE:
+                logging.info(f"Report  with id '{report_id}' in workspace '{workspace_id}' deleted successfully!")
+            else:
+                logging.error("Report deletion failed!")
+                self.force_raise_http_error(response)
+    @check_token
+    def update_workspace_report_content(self, workspace_id: str, report_id: str, source_report_id: str, source_workspace_id:str , source_type: str= "ExistingReport"):
+
+        source_report_details = { \
+                           "sourceReport": { \
+                           "sourceReportId": source_report_id, \
+                           "sourceWorkspaceId": source_workspace_id \
+                           }, \
+                           "sourceType": source_type \
+                           }
+        url = self.base_url + f"groups/{workspace_id}/reports/{report_id}/UpdateReportContent"
+        headers = {"Content-Type": "application/json", **self.get_auth_header()}
+        response = requests.post(url, json=source_report_details, headers=headers)
+
+        if response.status_code == HTTP_OK_CODE:
+                logging.info("UpdateReportContent success")
+        else:
+            logging.error(f"UpdateReportContent failed for report_id {report_id}!")
+            self.force_raise_http_error(response)
+
