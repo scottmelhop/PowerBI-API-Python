@@ -1,4 +1,5 @@
 import datetime
+import json
 import logging
 import os
 from typing import Callable, Dict, List, NoReturn, Union
@@ -70,12 +71,37 @@ class PowerBIAPIClient:
             self.force_raise_http_error(response)
 
     @staticmethod
-    def find_entity_id_by_name(entity_list: List, name: str, entity_type: str, raise_if_missing: bool = False) -> str:
+    def find_entity_id_by_name(
+        entity_list: List,
+        name: str,
+        entity_type: str,
+        raise_if_missing: bool = False,
+        attribute_name_alias: str = "name",
+        attribute_alias: str = "id",
+    ) -> str:
+ #       print('lower name=%s' % name.lower())
         for item in entity_list:
-            if item["name"] == name:
-                return item["id"]
+ #           print('item[attribute_name_alias].lower()=%s' % item[attribute_name_alias].lower())
+            if item[attribute_name_alias].lower() == name.lower():
+                return item[attribute_alias]
         if raise_if_missing:
             raise RuntimeError(f"No {entity_type} was found with the name: '{name}'")
+
+    @staticmethod
+    def find_entities_list_id_by_name(
+        entity_list: List,
+        name: str,
+        entity_type: str,
+        attribute_name_alias: str = "name",
+        attribute_alias: str = "id",
+    ) -> str:
+        items=[]
+        for item in entity_list:
+            if item[attribute_name_alias].lower() == name.lower():
+                items.append(item[attribute_alias])
+        return items
+
+        
 
     @check_token
     def create_workspace(self, name: str) -> None:
@@ -89,7 +115,8 @@ class PowerBIAPIClient:
 
         if response.json()["@odata.count"] > 0:
             logging.info("Workspace already exists, no changes made!")
-            return
+#            print(response.json())
+            return response.json()["value"][0]['id']
 
         # Workspace does not exist, lets create it:
         logging.info(f"Trying to create a workspace with name: {name}...")
@@ -99,6 +126,8 @@ class PowerBIAPIClient:
         if response.status_code == HTTP_OK_CODE:
             logging.info("Workspace created successfully!")
             self.get_workspaces()  # Update internal state
+ #           print(response.json())
+            return response.json()['id']
         else:
             logging.error(f"Failed to create the new workspace: '{name}':")
             self.force_raise_http_error(response)
@@ -157,9 +186,18 @@ class PowerBIAPIClient:
         if response.status_code == HTTP_OK_CODE:
             return response.json()["value"]
 
+
     @check_token
-    def refresh_dataset_by_id(self, workspace_name: str, dataset_id: str) -> None:
-        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
+    def get_datasets(self) -> List:
+
+        datasets_url = self.base_url + f"datasets"
+        response = requests.get(datasets_url, headers=self.headers)
+        response.raise_for_status()
+        if response.status_code == HTTP_OK_CODE:
+            return response.json()["value"]
+
+    @check_token
+    def refresh_dataset_by_id(self, workspace_id: str, dataset_id: str) -> None:
         url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}/refreshes"
         response = requests.post(url, data="notifyOption=NoNotification", headers=self.headers)
 
@@ -171,9 +209,10 @@ class PowerBIAPIClient:
 
     @check_token
     def refresh_dataset_by_name(self, workspace_name: str, dataset_name: str) -> None:
+        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
         datasets = self.get_datasets_in_workspace(workspace_name)
         dataset_id = self.find_entity_id_by_name(datasets, dataset_name, "dataset", True)
-        self.refresh_dataset_by_id(workspace_name, dataset_id)
+        self.refresh_dataset_by_id(workspace_id, dataset_id)
 
     @check_token
     def create_push_dataset(self, workspace_name: str, retention_policy: str) -> None:
@@ -271,6 +310,26 @@ class PowerBIAPIClient:
 
         if response.status_code == HTTP_OK_CODE:
             return response.json()["value"]
+    @check_token
+    def get_reports_in_workspace_by_id(self, workspace_id: str) -> List:
+ 
+        url = self.base_url + f"groups/{workspace_id}/reports"
+        response = requests.get(url, headers=self.headers)
+
+        if response.status_code == HTTP_OK_CODE:
+            return response.json()["value"]
+    @check_token
+    def is_report_in_workspace(self, workspace_id: str, report_name: str):
+        reports = self.get_reports_in_workspace_by_id(workspace_id)
+        report_id_list = self.find_entities_list_id_by_name(reports, report_name, "report")
+        return (len (report_id_list)>0 )
+
+    @check_token
+    def get_reports_id_by_name_in_workspace(self, workspace_id: str, report_name: str):
+        reports = self.get_reports_in_workspace_by_id(workspace_id)
+        report_id_list = self.find_entities_list_id_by_name(reports, report_name, "report")
+        return (report_id_list)
+        
 
     @check_token
     def rebind_report_in_workspace(self, workspace_name: str, dataset_name: str, report_name: str) -> None:
@@ -308,14 +367,13 @@ class PowerBIAPIClient:
 
     @check_token
     def import_file_into_workspace(
-        self, workspace_name: str, skip_report: bool, file_path: str, display_name: str
+        self, workspace_name: str, skip_report: bool, file_path: str, display_name: str, name_conflict: str ='CreateOrOverwrite'
     ) -> None:
         workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
 
         if not os.path.isfile(file_path):
             raise FileNotFoundError(2, f"No such file or directory: '{file_path}'")
 
-        name_conflict = "CreateOrOverwrite"
         url = (
             self.base_url
             + f"groups/{workspace_id}/imports?datasetDisplayName={display_name}&nameConflict="
@@ -343,7 +401,7 @@ class PowerBIAPIClient:
 
             if response.json()["importState"] == "Succeeded":
                 logging.info("Import complete")
-                return
+                return response
             else:
                 logging.info("Import in progress...")
 
@@ -365,6 +423,25 @@ class PowerBIAPIClient:
                 )
         else:
             logging.error(f"Parameter update failed for dataset {dataset_name}!")
+            self.force_raise_http_error(response)
+
+
+    @check_token
+    def update_parameters_in_dataset_by_id(self, workspace_id: str, dataset_id: str, parameters: list):
+        update_details = {"updateDetails": parameters}
+        url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}/UpdateParameters"
+        headers = {"Content-Type": "application/json", **self.get_auth_header()}
+        response = requests.post(url, json=update_details, headers=headers)
+
+        if response.status_code == HTTP_OK_CODE:
+            for parameter in parameters:
+                logging.info(
+                    f"Parameter \"{parameter['name']}\"",
+                    f" updated to \"{parameter['newValue']}\"",
+                    f" in Dataset named '{dataset_id}' in workspace '{workspace_id}'!",
+                )
+        else:
+            logging.error(f"Parameter update failed for dataset {dataset_id}!")
             self.force_raise_http_error(response)
 
     @check_token
@@ -419,8 +496,358 @@ class PowerBIAPIClient:
 
     def get_workspace_and_dataset_id(self, workspace_name: str, dataset_name: str) -> Union:
         workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
-
+ #       print("workspace_id=%s" % workspace_id)
         datasets = self.get_datasets_in_workspace(workspace_name)
+ #       print("datasets=%s" % datasets)
         dataset_id = self.find_entity_id_by_name(datasets, dataset_name, "dataset", raise_if_missing=True)
 
         return workspace_id, dataset_id
+
+    @check_token
+    def get_pipelines(self) -> List:
+        url = self.base_url + "pipelines"
+        print(url)
+        response = requests.get(url, headers=self.headers)
+        if response.status_code == HTTP_OK_CODE:
+            self._workspaces = response.json()["value"]
+            return self._workspaces
+        else:
+            logging.error("Failed to fetch pipelines!")
+            self.force_raise_http_error(response)
+
+    @check_token
+    def get_pipeline(self, pipeline_id: str) -> List:
+        url = self.base_url + f"pipelines/{pipeline_id}"
+        response = requests.get(url, headers=self.headers)
+ #       print(response.json())
+        if response.status_code == HTTP_OK_CODE:
+            self._workspaces = response.json()
+            return self._workspaces
+        else:
+            logging.error("Failed to fetch pipeline!")
+            self.force_raise_http_error(response)
+
+    @check_token
+    def get_pipeline_by_name(self, pipeline_name) -> List:
+        pipelines_list = self.get_pipelines()
+        pipeline_id = self.find_entity_id_by_name(
+            pipelines_list, pipeline_name, "pipelines", raise_if_missing=True, attribute_name_alias="displayName"
+        )
+        print("pipeline id: %s" % pipeline_id)
+        return self.get_pipeline(pipeline_id)
+
+    @check_token
+    def get_pipeline_operations(self, pipeline_id: str) -> List:
+        url = self.base_url + f"pipelines/{pipeline_id}/operations"
+        response = requests.get(url, headers=self.headers)
+        if response.status_code == HTTP_OK_CODE:
+            self._workspaces = response.json()["value"]
+            return self._workspaces
+        else:
+            logging.error("Failed to fetch pipeline operations!")
+            self.force_raise_http_error(response)
+
+    @check_token
+    def get_pipeline_operations_by_name(self, pipeline_name: str) -> List:
+        pipelines_list = self.get_pipelines()
+        pipeline_id = self.find_entity_id_by_name(
+            pipelines_list, pipeline_name, "pipelines", raise_if_missing=True, attribute_name_alias="displayName"
+        )
+        print("pipeline id: %s" % pipeline_id)
+        return self.get_pipeline_operations(pipeline_id)
+
+    @check_token
+    def clone_report_by_name(
+        self,
+        workspace_name: str,
+        report_name: str,
+        new_report_name: str,
+        target_work_space_name: str = None,
+        target_model_id: str = None,
+    ) -> None:
+        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
+        workspace_reports = self.get_reports_in_workspace(workspace_name)
+        report_id = self.find_entity_id_by_name(workspace_reports, report_name, "reports", raise_if_missing=True)
+        url = self.base_url + f"groups/{workspace_id}/reports/{report_id}/Clone"
+        data = {}
+        data["Name"] = new_report_name
+        if target_work_space_name != None:
+            target_workspace_id = self.find_entity_id_by_name(
+                self.workspaces, target_work_space_name, "workspace", raise_if_missing=True
+            )
+            data["targetWorkspaceId"] = target_workspace_id
+        if target_model_id != None:
+            data["targetModelId"] = target_model_id
+        #       data="Name=" + new_report_name
+        response = requests.post(url, data=data, headers=self.headers)
+
+        if response.status_code == 200:
+            logging.info(f"report  {report_id} from workspace {workspace_name}) was cloned ")
+            return response.json()
+        else:
+            logging.error("Dataset refresh failed!")
+            self.force_raise_http_error(response, expected_codes=200)
+
+    @check_token
+    def get_dataset_datasources(self, workspace_id, dataset_id) -> List:
+        url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}/datasources"
+        response = requests.get(url, headers=self.headers)
+
+        if response.status_code == HTTP_OK_CODE:
+            self._workspaces = response.json()["value"]
+            return self._workspaces
+        else:
+            logging.error("Failed to datasources!")
+            self.force_raise_http_error(response)
+
+    @check_token
+    def get_dataset_datasources_by_name(self, workspace_name, dataset_name) -> List:
+        workspace_id, dataset_id = self.get_workspace_and_dataset_id(workspace_name, dataset_name)
+        print("workspace_id: %s , dataset id: %s" % (workspace_id, dataset_id))
+        return self.get_dataset_datasources(workspace_id, dataset_id)
+
+    @check_token
+    def update_datasource(self, gateway_id: str, datasource_id: str, user_name: str, password: str):
+
+        url = self.base_url + f"gateways/{gateway_id}/datasources/{datasource_id}"
+        headers = {"Content-Type": "application/json", **self.get_auth_header()}
+
+        credentialDetails = {
+            "credentialType": "Basic",
+            "encryptedConnection": "Encrypted",
+            "encryptionAlgorithm": "None",
+            "privacyLevel": "None",
+            "useEndUserOAuth2Credentials": "False",
+        }
+
+        credentials = {}
+        credentials["credentialData"] = [
+            {"name": "username", "value": user_name},
+            {"name": "password", "value": password},
+        ]
+        credentialDetails["credentials"] = str(credentials)
+        data = {"credentialDetails": credentialDetails}
+
+        response = requests.patch(url, headers=headers, json=data)
+        if response.status_code == HTTP_OK_CODE:
+            logging.info(f"update credentials Complete")
+        else:
+            logging.error(f"update credentials failed for gateway_id {gateway_id} and  datasource_id {datasource_id}!")
+            self.force_raise_http_error(response)
+
+    @check_token
+    def execute_queries(self, dataset_id: str, query_list: list, serializerSettings: dict) -> None:
+
+        body = {"queries": query_list, "serializerSettings": serializerSettings}
+        # Workspace exists, lets add user:
+        url = self.base_url + f"datasets/{dataset_id}/executeQueries"
+        print("url=%s" % url)
+        headers = {"Content-Type": "application/json", **self.get_auth_header()}
+        print("json=%s" % json)
+        response = requests.post(url, json=body, headers=headers)
+
+        if response.status_code == HTTP_OK_CODE:
+            logging.info(f"success execute_queries")
+            return json.loads(response.text.encode("utf8"))
+        else:
+            logging.error(f"Failed to execute_queries': {json}")
+            self.force_raise_http_error(response)
+
+    @check_token
+    def execute_queries_by_name(
+        self, workspace_name: str, dataset_name: str, query_list: list, serializerSettings: dict
+    ) -> None:
+        datasets = self.get_datasets_in_workspace(workspace_name)
+        dataset_id = self.find_entity_id_by_name(datasets, dataset_name, "dataset", True)
+        return self.execute_queries(dataset_id=dataset_id, query_list=query_list, serializerSettings=serializerSettings)
+
+    @check_token
+    def bind_to_gateway(self, dataset_Id: str, gateway_id: str) -> None:
+        # 403: {"Message":"API is not accessible for application"}
+        url = self.base_url + f"datasets/{dataset_Id}/Default.BindToGateway"
+        gatewayObject = {"gatewayObjectId": gateway_id}
+        response = requests.post(url, json=gatewayObject, headers=self.headers)
+
+        if response.status_code == HTTP_OK_CODE:
+            logging.info(f"Takeover of dataset {dataset_Id} Complete")
+        else:
+            logging.error(f"Takeover of dataset {dataset_Id} failed!")
+            self.force_raise_http_error(response)
+
+    @check_token
+    def get_workspace_and_report_id(self, workspace_name: str, report_name: str) -> Union:
+        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
+        print("workspace_id=%s" % workspace_id)
+        reports = self.get_reports_in_workspace(workspace_name)
+        print("datasets=%s" % reports)
+        report_id = self.find_entity_id_by_name(
+            reports, report_name, "report", raise_if_missing=True, attribute_name_alias="name", attribute_alias="id"
+        )
+        dataset_id = self.find_entity_id_by_name(
+            reports,
+            report_name,
+            "report",
+            raise_if_missing=True,
+            attribute_name_alias="name",
+            attribute_alias="datasetId",
+        )
+
+        return workspace_id, report_id, dataset_id
+
+    def get_dataset_in_workspace(self, workspace_name: str, dataset_id: str) -> List:
+        workspace_id = self.find_entity_id_by_name(self.workspaces, workspace_name, "workspace", raise_if_missing=True)
+
+        datasets_url = self.base_url + f"groups/{workspace_id}/datasets/{dataset_id}"
+        response = requests.get(datasets_url, headers=self.headers)
+        response.raise_for_status()
+        if response.status_code == HTTP_OK_CODE:
+            return response.json()
+
+    @check_token
+    def get_datasets_in_workspace_by_id(self, workspace_id: str) -> List:
+        datasets_url = self.base_url + f"groups/{workspace_id}/datasets"
+        response = requests.get(datasets_url, headers=self.headers)
+        response.raise_for_status()
+        if response.status_code == HTTP_OK_CODE:
+            return response.json()["value"]           
+    def print_all_datasources(self):        
+        for ws in self.workspaces:
+            wsname=ws['name']
+            dss=self.get_datasets_in_workspace_by_id(ws['id'])
+            print ('ws name: %s, ws id: %s' % (wsname, ws['id']) )
+            for ds in dss:
+                print ('   dataset=%s datasetId=%s' % (ds['name'], ds['id']))
+                datasource=self.get_dataset_datasources(ws['id'], ds['id'])
+                print ('         datasource: %s' % datasource)
+            
+    @staticmethod
+    def find_entity_by_name(
+        entity_list: List,
+        name: str,
+        entity_type: str,
+        raise_if_missing: bool = False,
+        attribute_name_alias: str = "name",
+        attribute_alias: str = "id",
+    ) -> str:
+        for item in entity_list:
+            if item[attribute_name_alias].lower() == name.lower():
+                return item
+        if raise_if_missing:
+            raise RuntimeError(f"No {entity_type} was found with the name: '{name}'")
+
+    def get_report_by_workspace_id_and_report_id(self, workspace_id: str, report_id: str) -> dict:
+        
+        url = self.base_url + f"groups/{workspace_id}/reports/{report_id}"
+        response = requests.get(url, headers=self.headers)
+
+        if response.status_code == HTTP_OK_CODE:
+            return response.json()
+
+    @check_token
+    def rebind_report_in_workspace_by_id(self, workspace_id: str, dataset_id: str, report_id: str) -> None:
+
+        url = self.base_url + f"groups/{workspace_id}/reports/{report_id}/Rebind"
+        headers = {"Content-Type": "application/json", **self.get_auth_header()}
+        payload = {"datasetId": dataset_id}
+
+        response = requests.post(url, json=payload, headers=headers)
+        if response.status_code == HTTP_OK_CODE:
+            logging.info(f"Report named '{report_id}' rebound to dataset with name '{dataset_id}'")
+        else:
+            logging.error(f"Failed to rebind report with name '{report_id}' to dataset with name '{dataset_id}'")
+            self.force_raise_http_error(response)
+
+
+    @check_token
+    def clone_report_by_id(
+        self,
+        workspace_id: str,
+        report_id: str,
+        new_report_name: str,
+        target_workspace_id: str = None,
+        target_model_id: str = None,
+    ) -> None:
+        url = self.base_url + f"groups/{workspace_id}/reports/{report_id}/Clone"
+        data = {}
+        data["Name"] = new_report_name
+        if target_workspace_id != None:
+            data["targetWorkspaceId"] = target_workspace_id
+        if target_model_id != None:
+            data["targetModelId"] = target_model_id
+        response = requests.post(url, data=data, headers=self.headers)
+
+        if response.status_code == 200:
+            logging.info(f"report  {report_id} from workspace {workspace_id}) was cloned ")
+            return response.json()
+        else:
+            logging.error("Dataset refresh failed!")
+            self.force_raise_http_error(response, expected_codes=200)
+
+
+    @check_token
+    def get_dataset_by_ws_id_and_ds_name(self, workspace_id: str, dataset_name: str) -> None:
+        datasets = self.get_datasets_in_workspace_by_id(workspace_id)
+        dataset = self.find_entity_by_name(datasets, dataset_name, "dataset", True)
+        return (dataset)
+
+    @check_token
+    def delete_reports_by_workspace_id(self, workspace_id: str, report_name: str) -> None:
+        reports = self.get_reports_in_workspace_by_id(workspace_id)
+        report_id_list = self.find_entities_list_id_by_name(reports, report_name, "report")
+        for report_id in report_id_list:
+            url = self.base_url + f"groups/{workspace_id}/reports/{report_id}"
+            response = requests.delete(url, headers=self.headers)
+            if response.status_code == HTTP_OK_CODE:
+                logging.info(f"Report named '{report_name}' with id '{report_id}' in workspace '{workspace_id}' deleted successfully!")
+            else:
+                logging.error("Report deletion failed!")
+                self.force_raise_http_error(response)
+    @check_token
+    def delete_reports_by_report_id_and_workspace_id(self, workspace_id: str, report_id: str) -> None:
+            url = self.base_url + f"groups/{workspace_id}/reports/{report_id}"
+            response = requests.delete(url, headers=self.headers)
+            if response.status_code == HTTP_OK_CODE:
+                logging.info(f"Report  with id '{report_id}' in workspace '{workspace_id}' deleted successfully!")
+            else:
+                logging.error("Report deletion failed!")
+                self.force_raise_http_error(response)
+    @check_token
+    def update_workspace_report_content(self, workspace_id: str, report_id: str, source_report_id: str, source_workspace_id:str , source_type: str= "ExistingReport"):
+
+        source_report_details = { \
+                           "sourceReport": { \
+                           "sourceReportId": source_report_id, \
+                           "sourceWorkspaceId": source_workspace_id \
+                           }, \
+                           "sourceType": source_type \
+                           }
+        url = self.base_url + f"groups/{workspace_id}/reports/{report_id}/UpdateReportContent"
+        headers = {"Content-Type": "application/json", **self.get_auth_header()}
+        response = requests.post(url, json=source_report_details, headers=headers)
+
+        if response.status_code == HTTP_OK_CODE:
+                logging.info("UpdateReportContent success")
+        else:
+            logging.error(f"UpdateReportContent failed for report_id {report_id}!")
+            self.force_raise_http_error(response)
+
+
+    @check_token
+    def generate_token(self, dataset_list=None, reports_list=None, target_workspace_list=None,identities_list=None ):
+        scope = {  \
+                "datasets": dataset_list, \
+                "reports": reports_list, \
+                "targetWorkspaces": target_workspace_list, \
+                "identities": identities_list         
+                }
+
+        url = self.base_url + f"GenerateToken"
+        headers = {"Content-Type": "application/json", **self.get_auth_header()}
+        response = requests.post(url, json=scope, headers=headers)
+
+        if response.status_code == HTTP_OK_CODE:
+                logging.info("GenerateToken success")
+        else:
+            logging.error(f"GenerateToken failed")
+            self.force_raise_http_error(response)
+        return (response)
