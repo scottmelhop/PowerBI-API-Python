@@ -831,3 +831,23 @@ class PowerBIAPIClient:
             logging.error(f"UpdateReportContent failed for report_id {report_id}!")
             self.force_raise_http_error(response)
 
+
+    @check_token
+    def generate_token(self, dataset_list=None, reports_list=None, target_workspace_list=None,identities_list=None ):
+        scope = {  \
+                "datasets": dataset_list, \
+                "reports": reports_list, \
+                "targetWorkspaces": target_workspace_list, \
+                "identities": identities_list         
+                }
+
+        url = self.base_url + f"GenerateToken"
+        headers = {"Content-Type": "application/json", **self.get_auth_header()}
+        response = requests.post(url, json=scope, headers=headers)
+
+        if response.status_code == HTTP_OK_CODE:
+                logging.info("GenerateToken success")
+        else:
+            logging.error(f"GenerateToken failed")
+            self.force_raise_http_error(response)
+        return (response)
